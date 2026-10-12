@@ -16,6 +16,16 @@ export interface GridPosition {
   row: number;
 }
 
+export interface ScoreEvent {
+  readonly position: GridPosition;
+  readonly score: number;
+  readonly eatenAtFrame: number;
+}
+
+export interface ScorePopup extends ScoreEvent {
+  readonly age: number;
+}
+
 const BACKGROUND = "#0d1117";
 const CHARACTER = "#ffdf00";
 const EYE = "#242424";
@@ -37,6 +47,25 @@ const DEFAULT_ZIGZAG_SEED = 0xC0FFEE;
 const CONTRIBUTION_ROWS = 7;
 const MIN_ZIGZAG_RUN = 8;
 const MAX_ZIGZAG_RUN = 14;
+
+const SCORE_POPUP_DURATION_FRAMES = 5;
+const SCORE_POPUP_RISE_PER_FRAME = 1;
+const SCORE_POPUP_MAX_RISE = 4;
+const SCORE_GLYPH_WIDTH = 3;
+const SCORE_GLYPH_HEIGHT = 5;
+const SCORE_GLYPHS: Record<string, readonly string[]> = {
+  "+": ["...", ".#.", "###", ".#.", "..."],
+  "0": ["###", "#.#", "#.#", "#.#", "###"],
+  "1": [".#.", "##.", ".#.", ".#.", "###"],
+  "2": ["###", "..#", "###", "#..", "###"],
+  "3": ["###", "..#", "###", "..#", "###"],
+  "4": ["#.#", "#.#", "###", "..#", "..#"],
+  "5": ["###", "#..", "###", "..#", "###"],
+  "6": ["###", "#..", "###", "#.#", "###"],
+  "7": ["###", "..#", "..#", ".#.", ".#."],
+  "8": ["###", "#.#", "###", "#.#", "###"],
+  "9": ["###", "#.#", "###", "..#", "###"],
+};
 
 /**
  * Build a deterministic, connected path through every contribution cell.
@@ -164,6 +193,44 @@ export function getContributionLevelForFrame(
   return "NONE";
 }
 
+
+/**
+ * Build one score event per green contribution cell, in the order Commit-Man
+ * reaches those cells. Empty gray cells never award points.
+ */
+export function buildScoreEvents(
+  path: readonly GridPosition[],
+  cellByKey: ReadonlyMap<string, ContributionDay>,
+): ScoreEvent[] {
+  const events: ScoreEvent[] = [];
+  let score = 0;
+
+  path.forEach((position, eatenAtFrame) => {
+    const day = cellByKey.get(positionKey(position));
+    if (!day || day.contributionLevel === "NONE") return;
+
+    score += 1;
+    events.push({ position, score, eatenAtFrame });
+  });
+
+  return events;
+}
+
+/**
+ * Return score popups that are visible in a frame, with their age for animation.
+ */
+export function getScorePopupsForFrame(
+  events: readonly ScoreEvent[],
+  frameIndex: number,
+): ScorePopup[] {
+  return events.flatMap((event) => {
+    const age = frameIndex - event.eatenAtFrame;
+    return age < 0 || age >= SCORE_POPUP_DURATION_FRAMES
+      ? []
+      : [{ ...event, age }];
+  });
+}
+
 /**
  * Render an animated GIF of Commit-Man travelling through the contribution
  * garden. The character follows a connected, varied-width zigzag path and
@@ -228,6 +295,7 @@ export function renderCommitManGif(
   }
 
   const visitOrder = new Map(path.map((position, index) => [positionKey(position), index]));
+  const scoreEvents = buildScoreEvents(path, cellByKey);
   const encoder = GIFEncoder();
   const radius = Math.max(3, cellSize * 0.66);
 
@@ -273,6 +341,20 @@ export function renderCommitManGif(
       heading,
       MOUTH_SEQUENCE[frameIndex % MOUTH_SEQUENCE.length]!,
     );
+
+    for (const popup of getScorePopupsForFrame(scoreEvents, frameIndex)) {
+      const cellX = padding + popup.position.column * pitch;
+      const cellY = padding + popup.position.row * pitch;
+      drawScorePopup(
+        pixels,
+        width,
+        height,
+        cellX + cellSize / 2,
+        cellY,
+        popup.score,
+        popup.age,
+      );
+    }
 
     const indexed = applyPalette(pixels, PALETTE);
     encoder.writeFrame(indexed, width, height, {
@@ -363,6 +445,76 @@ function fillCell(
       pixels[offset + 2] = color[2];
       pixels[offset + 3] = 255;
     }
+  }
+}
+
+/**
+ * Draw a short-lived yellow +N label that rises above the eaten contribution.
+ * A compact 3x5 bitmap font keeps rendering deterministic without extra assets.
+ */
+function drawScorePopup(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  centerX: number,
+  cellTop: number,
+  score: number,
+  age: number,
+): void {
+  const text = `+${score}`;
+  const scale = score < 10 ? 2 : 1;
+  const textWidth =
+    text.length * SCORE_GLYPH_WIDTH * scale + (text.length - 1) * scale;
+  const textHeight = SCORE_GLYPH_HEIGHT * scale;
+  const x = Math.round(centerX - textWidth / 2);
+  const rise = Math.min(age * SCORE_POPUP_RISE_PER_FRAME, SCORE_POPUP_MAX_RISE);
+  const y = Math.max(0, Math.round(cellTop - textHeight - 2 - rise));
+  const shadow = hexToRgb(BACKGROUND);
+  const foreground = hexToRgb(CHARACTER);
+
+  drawBitmapText(pixels, width, height, text, x + 1, y + 1, shadow, scale);
+  drawBitmapText(pixels, width, height, text, x, y, foreground, scale);
+}
+
+function drawBitmapText(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  text: string,
+  x: number,
+  y: number,
+  color: [number, number, number],
+  scale: number,
+): void {
+  let cursorX = x;
+
+  for (const character of text) {
+    const glyph = SCORE_GLYPHS[character];
+    if (!glyph) {
+      cursorX += (SCORE_GLYPH_WIDTH + 1) * scale;
+      continue;
+    }
+
+    for (let row = 0; row < glyph.length; row += 1) {
+      for (let column = 0; column < glyph[row]!.length; column += 1) {
+        if (glyph[row]![column] !== "#") continue;
+
+        for (let offsetY = 0; offsetY < scale; offsetY += 1) {
+          for (let offsetX = 0; offsetX < scale; offsetX += 1) {
+            setPixel(
+              pixels,
+              width,
+              height,
+              cursorX + column * scale + offsetX,
+              y + row * scale + offsetY,
+              color,
+            );
+          }
+        }
+      }
+    }
+
+    cursorX += (SCORE_GLYPH_WIDTH + 1) * scale;
   }
 }
 

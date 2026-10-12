@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ContributionDay } from "../src/contributions.js";
 import {
+  buildScoreEvents,
   buildZigzagPath,
   getCommitManEyePosition,
   getContributionLevelForFrame,
+  getScorePopupsForFrame,
   renderCommitManGif,
 } from "../src/animation.js";
 
@@ -102,6 +104,48 @@ test("turns an eaten green contribution cell gray without removing its square", 
   assert.equal(getContributionLevelForFrame(greenDay, 2, 1), "FIRST_QUARTILE");
   assert.equal(getContributionLevelForFrame(greenDay, 2, 2), "FIRST_QUARTILE");
   assert.equal(getContributionLevelForFrame(greenDay, 2, 3), "NONE");
+});
+
+test("awards increasing scores only for green contribution cells", () => {
+  const path = [
+    { column: 0, row: 0 },
+    { column: 1, row: 0 },
+    { column: 2, row: 0 },
+    { column: 0, row: 1 },
+  ];
+  const cellByKey = new Map([
+    ["0:0", sampleDays[0]!],
+    ["1:0", sampleDays[1]!],
+    ["2:0", sampleDays[2]!],
+    ["0:1", sampleDays[0]!],
+  ]);
+
+  const events = buildScoreEvents(path, cellByKey);
+  assert.deepEqual(
+    events.map(({ position, score, eatenAtFrame }) => ({ position, score, eatenAtFrame })),
+    [
+      { position: { column: 1, row: 0 }, score: 1, eatenAtFrame: 1 },
+      { position: { column: 2, row: 0 }, score: 2, eatenAtFrame: 2 },
+    ],
+  );
+});
+
+test("shows floating score popups briefly with an increasing score", () => {
+  const events = [
+    { position: { column: 1, row: 0 }, score: 1, eatenAtFrame: 1 },
+    { position: { column: 2, row: 0 }, score: 2, eatenAtFrame: 2 },
+    { position: { column: 3, row: 0 }, score: 3, eatenAtFrame: 3 },
+  ];
+
+  assert.deepEqual(
+    getScorePopupsForFrame(events, 2).map(({ score, age }) => ({ score, age })),
+    [{ score: 1, age: 1 }, { score: 2, age: 0 }],
+  );
+  assert.deepEqual(
+    getScorePopupsForFrame(events, 6).map(({ score, age }) => ({ score, age })),
+    [{ score: 2, age: 4 }, { score: 3, age: 3 }],
+  );
+  assert.deepEqual(getScorePopupsForFrame(events, 8), []);
 });
 
 test("keeps Commit-Man's eye upright when moving left or right", () => {
