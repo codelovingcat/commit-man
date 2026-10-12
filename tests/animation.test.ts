@@ -62,8 +62,30 @@ test("builds a deterministic zigzag with varied run lengths", () => {
   }
 
   const firstHorizontalRunLength = path.findIndex((position) => position.row !== 0);
-  assert.ok(firstHorizontalRunLength >= 2 && firstHorizontalRunLength <= 5);
+  assert.ok(firstHorizontalRunLength >= 8 && firstHorizontalRunLength <= 14);
   assert.ok(firstHorizontalRunLength < columns, "the first run should end before crossing the entire garden");
+
+  const normalGridPath = buildZigzagPath(53, seed);
+  const horizontalRunLengths: number[] = [];
+  let horizontalRunLength = 1;
+
+  for (let index = 1; index < normalGridPath.length; index += 1) {
+    const previous = normalGridPath[index - 1]!;
+    const current = normalGridPath[index]!;
+
+    if (previous.row === current.row) {
+      horizontalRunLength += 1;
+    } else {
+      horizontalRunLengths.push(horizontalRunLength);
+      horizontalRunLength = 1;
+    }
+  }
+  horizontalRunLengths.push(horizontalRunLength);
+
+  assert.ok(
+    horizontalRunLengths.every((length) => length >= 8),
+    `normal-grid path contains a short horizontal run: ${horizontalRunLengths.join(", ")}`,
+  );
 });
 
 test("keeps empty contribution cells gray throughout the animation", () => {

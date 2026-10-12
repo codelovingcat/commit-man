@@ -35,14 +35,13 @@ const DEFAULT_FRAME_DELAY_MS = 70;
 
 const DEFAULT_ZIGZAG_SEED = 0xC0FFEE;
 const CONTRIBUTION_ROWS = 7;
-const MIN_ZIGZAG_RUN = 2;
-const MAX_ZIGZAG_RUN = 5;
+const MIN_ZIGZAG_RUN = 8;
+const MAX_ZIGZAG_RUN = 14;
 
 /**
  * Build a deterministic, connected path through every contribution cell.
- * The route snakes through short column bands of varying widths instead of
- * crossing the entire garden before changing rows. Odd/even bands alternate
- * between descending and ascending through the seven rows.
+ * Long, varied column bands reduce the rapid back-and-forth movement while
+ * retaining a continuous serpentine route through the full grid.
  */
 export function buildZigzagPath(
   columns: number,
@@ -56,15 +55,11 @@ export function buildZigzagPath(
   }
 
   const random = createSeededRandom(seed);
+  const bandWidths = createZigzagBandWidths(columns, random);
   const bands: Array<{ startColumn: number; width: number }> = [];
   let nextColumn = 0;
 
-  while (nextColumn < columns) {
-    const remaining = columns - nextColumn;
-    const width = remaining <= MAX_ZIGZAG_RUN
-      ? remaining
-      : MIN_ZIGZAG_RUN + Math.floor(random() * (MAX_ZIGZAG_RUN - MIN_ZIGZAG_RUN + 1));
-
+  for (const width of bandWidths) {
     bands.push({ startColumn: nextColumn, width });
     nextColumn += width;
   }
@@ -93,6 +88,52 @@ export function buildZigzagPath(
   }
 
   return path;
+}
+
+/**
+ * Choose varied band widths while avoiding a very short final band on normal
+ * contribution grids. Small grids can be narrower than the preferred range.
+ */
+function createZigzagBandWidths(
+  columns: number,
+  random: () => number,
+): number[] {
+  const minimumBandCount = Math.ceil(columns / MAX_ZIGZAG_RUN);
+  const maximumBandCount = Math.max(1, Math.floor(columns / MIN_ZIGZAG_RUN));
+  const preferredBandCount = Math.max(1, Math.round(columns / 11));
+  const bandCount = minimumBandCount <= maximumBandCount
+    ? Math.max(minimumBandCount, Math.min(maximumBandCount, preferredBandCount))
+    : minimumBandCount;
+
+  const widths: number[] = [];
+  let remaining = columns;
+
+  for (let index = 0; index < bandCount; index += 1) {
+    const bandsLeft = bandCount - index - 1;
+    if (bandsLeft === 0) {
+      widths.push(remaining);
+      break;
+    }
+
+    const minimumWidth = Math.max(
+      MIN_ZIGZAG_RUN,
+      remaining - bandsLeft * MAX_ZIGZAG_RUN,
+    );
+    const maximumWidth = Math.min(
+      MAX_ZIGZAG_RUN,
+      remaining - bandsLeft * MIN_ZIGZAG_RUN,
+    );
+
+    const width = minimumWidth <= maximumWidth
+      ? minimumWidth + Math.floor(random() * (maximumWidth - minimumWidth + 1))
+      : Math.floor(remaining / (bandsLeft + 1))
+        + (index < remaining % (bandsLeft + 1) ? 1 : 0);
+
+    widths.push(width);
+    remaining -= width;
+  }
+
+  return widths;
 }
 
 function createSeededRandom(seed: number): () => number {
