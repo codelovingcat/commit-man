@@ -3,6 +3,7 @@ import test from "node:test";
 import type { ContributionDay } from "../src/contributions.js";
 import {
   buildSerpentinePath,
+  getCommitManEyePosition,
   getContributionLevelForFrame,
   renderCommitManGif,
 } from "../src/animation.js";
@@ -46,6 +47,33 @@ test("turns an eaten green contribution cell gray without removing its square", 
   assert.equal(getContributionLevelForFrame(greenDay, 2, 1), "FIRST_QUARTILE");
   assert.equal(getContributionLevelForFrame(greenDay, 2, 2), "FIRST_QUARTILE");
   assert.equal(getContributionLevelForFrame(greenDay, 2, 3), "NONE");
+});
+
+test("keeps Commit-Man's eye upright when moving left or right", () => {
+  const centerX = 50;
+  const centerY = 50;
+  const radius = 10;
+
+  const movingRight = getCommitManEyePosition(centerX, centerY, radius, 0);
+  const movingLeft = getCommitManEyePosition(centerX, centerY, radius, Math.PI);
+
+  assert.ok(movingRight.y < centerY);
+  assert.equal(movingLeft.y, movingRight.y);
+  assert.ok(movingRight.x > centerX);
+  assert.ok(movingLeft.x < centerX);
+});
+
+test("keeps Commit-Man's eye above its center while moving vertically", () => {
+  const centerX = 50;
+  const centerY = 50;
+  const radius = 10;
+
+  for (const heading of [Math.PI / 2, -Math.PI / 2]) {
+    const eye = getCommitManEyePosition(centerX, centerY, radius, heading);
+    assert.equal(eye.y, Math.round(centerY - radius * 0.43));
+    assert.ok(eye.y < centerY);
+    assert.equal(eye.x, centerX);
+  }
 });
 
 test("renders a valid, looping GIF with the expected dimensions", () => {

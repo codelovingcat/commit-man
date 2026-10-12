@@ -271,6 +271,23 @@ function fillCell(
   }
 }
 
+/**
+ * Keep the eye on the character's upper side regardless of travel direction.
+ * Only let it shift slightly left/right; rotating it with the heading made
+ * Commit-Man look upside down whenever it travelled left.
+ */
+export function getCommitManEyePosition(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  heading: number,
+): { x: number; y: number } {
+  return {
+    x: Math.round(centerX + Math.cos(heading) * radius * 0.1),
+    y: Math.round(centerY - radius * 0.43),
+  };
+}
+
 function drawCommitMan(
   pixels: Uint8ClampedArray,
   width: number,
@@ -307,8 +324,9 @@ function drawCommitMan(
     }
   }
 
-  const eyeX = Math.round(centerX + Math.cos(heading - Math.PI / 2) * radius * 0.43 + Math.cos(heading) * radius * 0.1);
-  const eyeY = Math.round(centerY + Math.sin(heading - Math.PI / 2) * radius * 0.43 + Math.sin(heading) * radius * 0.1);
+  const eyePosition = getCommitManEyePosition(centerX, centerY, radius, heading);
+  const eyeX = eyePosition.x;
+  const eyeY = eyePosition.y;
   const eyeRadius = Math.max(1, Math.floor(radius * 0.18));
   for (let y = eyeY - eyeRadius; y <= eyeY + eyeRadius; y += 1) {
     for (let x = eyeX - eyeRadius; x <= eyeX + eyeRadius; x += 1) {
