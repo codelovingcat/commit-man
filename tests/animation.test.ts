@@ -8,6 +8,8 @@ import {
   getCommitPauseFramesForFrame,
   getContributionLevelForFrame,
   getFinaleFrameState,
+  getProgressColor,
+  getScoreAtFrame,
   getScorePopupsForFrame,
   getScoreProgressColor,
   renderCommitManGif,
@@ -154,16 +156,39 @@ test("adds a deterministic one- or two-frame pause before eating green cells onl
   assert.equal(getCommitPauseFramesForFrame([], 0), 0);
 });
 
-test("progresses score colors from yellow through orange and blues to deep green", () => {
-  assert.equal(getScoreProgressColor(0, 100), "#FFDF00");
-  assert.equal(getScoreProgressColor(15, 100), "#FF9800");
-  assert.equal(getScoreProgressColor(28, 100), "#F97316");
-  assert.equal(getScoreProgressColor(38, 100), "#7DD3FC");
-  assert.equal(getScoreProgressColor(52, 100), "#3B82F6");
-  assert.equal(getScoreProgressColor(65, 100), "#1D4ED8");
-  assert.equal(getScoreProgressColor(76, 100), "#86EFAC");
-  assert.equal(getScoreProgressColor(88, 100), "#22C55E");
-  assert.equal(getScoreProgressColor(100, 100), "#006D32");
+test("progresses the shared character-and-popup color from yellow through orange and blues to deep green", () => {
+  assert.equal(getProgressColor(0, 100), "#FFDF00");
+  assert.equal(getProgressColor(15, 100), "#FF9800");
+  assert.equal(getProgressColor(28, 100), "#F97316");
+  assert.equal(getProgressColor(38, 100), "#7DD3FC");
+  assert.equal(getProgressColor(52, 100), "#3B82F6");
+  assert.equal(getProgressColor(65, 100), "#1D4ED8");
+  assert.equal(getProgressColor(76, 100), "#86EFAC");
+  assert.equal(getProgressColor(88, 100), "#22C55E");
+  assert.equal(getProgressColor(100, 100), "#006D32");
+  assert.equal(getScoreProgressColor(52, 100), getProgressColor(52, 100));
+});
+
+test("keeps Commit-Man and the popup exactly synchronized at every eaten-cell event", () => {
+  const events = [
+    { position: { column: 1, row: 0 }, score: 1, eatenAtFrame: 2 },
+    { position: { column: 2, row: 0 }, score: 2, eatenAtFrame: 5 },
+    { position: { column: 3, row: 0 }, score: 3, eatenAtFrame: 9 },
+  ];
+
+  assert.equal(getScoreAtFrame(events, 0), 0);
+  assert.equal(getScoreAtFrame(events, 1), 0);
+  assert.equal(getScoreAtFrame(events, 2), 1);
+  assert.equal(getScoreAtFrame(events, 4), 1, "empty-cell movement must not advance color");
+  assert.equal(getScoreAtFrame(events, 5), 2);
+  assert.equal(getScoreAtFrame(events, 8), 2);
+  assert.equal(getScoreAtFrame(events, 9), 3);
+
+  for (const event of events) {
+    const characterColor = getProgressColor(getScoreAtFrame(events, event.eatenAtFrame), events.length);
+    const popupColor = getProgressColor(event.score, events.length);
+    assert.equal(characterColor, popupColor, "color mismatch at score " + event.score);
+  }
 });
 
 test("clamps score-color progress and defaults empty totals to bright yellow", () => {
