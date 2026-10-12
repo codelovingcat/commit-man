@@ -93,7 +93,9 @@ export function buildZigzagPath(
   const visited = new Set<string>([positionKey(path[0]!)]);
   let current = path[0]!;
   let horizontalDirection = 1;
-  let segmentsUntilTurn = 3;
+  let segmentsUntilTurn: number | undefined = 3;
+  let earlyTurnAllowed = true;
+  let rearmAtColumn: number | undefined;
 
   const append = (position: GridPosition): void => {
     path.push(position);
@@ -101,8 +103,8 @@ export function buildZigzagPath(
     visited.add(positionKey(position));
   };
 
-  // Roam in long horizontal bursts before doing a tidy coverage pass.
-  // This creates the less repetitive movement pattern requested for the GIF.
+  // Keep moving in the same direction across multiple runs. The occasional
+  // short return is followed by a full traverse before another early turn.
   for (
     let segmentIndex = 0;
     segmentIndex < columns && visited.size < totalCells;
@@ -129,10 +131,25 @@ export function buildZigzagPath(
     if (visited.size === totalCells) break;
 
     const atGridEdge = current.column === 0 || current.column === columns - 1;
-    if (hitGridEdge || atGridEdge || segmentsUntilTurn <= 1) {
+    if (hitGridEdge || atGridEdge) {
       horizontalDirection *= -1;
-      segmentsUntilTurn = random() < 0.7 ? 3 : 2;
-    } else {
+
+      if (!earlyTurnAllowed && current.column === rearmAtColumn) {
+        earlyTurnAllowed = true;
+        segmentsUntilTurn = random() < 0.35
+          ? 3 + Math.floor(random() * 2)
+          : undefined;
+      } else if (earlyTurnAllowed) {
+        segmentsUntilTurn = random() < 0.35
+          ? 3 + Math.floor(random() * 2)
+          : undefined;
+      }
+    } else if (earlyTurnAllowed && segmentsUntilTurn === 1) {
+      horizontalDirection *= -1;
+      earlyTurnAllowed = false;
+      rearmAtColumn = horizontalDirection > 0 ? 0 : columns - 1;
+      segmentsUntilTurn = undefined;
+    } else if (earlyTurnAllowed && segmentsUntilTurn !== undefined) {
       segmentsUntilTurn -= 1;
     }
 
