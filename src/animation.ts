@@ -1,4 +1,6 @@
-import { applyPalette, GIFEncoder } from "gifenc";
+import gifenc from "gifenc";
+
+const { applyPalette, GIFEncoder } = gifenc;
 import type { ContributionDay } from "./contributions.js";
 import { LEVEL_COLORS } from "./garden.js";
 
