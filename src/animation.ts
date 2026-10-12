@@ -53,6 +53,19 @@ export function buildSerpentinePath(columns: number): GridPosition[] {
 }
 
 /**
+ * Empty contribution cells are part of GitHub's grid background, not food.
+ * Keep them visible after Commit-Man passes; visited contribution cells vanish.
+ */
+export function shouldRenderContributionCell(
+  day: ContributionDay,
+  visitedAt: number | undefined,
+  frameIndex: number,
+): boolean {
+  if (visitedAt === undefined) return false;
+  return day.contributionLevel === "NONE" || visitedAt >= frameIndex;
+}
+
+/**
  * Render an animated GIF of Commit-Man travelling through the contribution
  * garden. The character follows a continuous serpentine path and removes each
  * visited contribution cell to create a simple eating effect.
@@ -124,7 +137,7 @@ export function renderCommitManGif(
 
     for (const [key, day] of cellByKey) {
       const visitedAt = visitOrder.get(key);
-      if (visitedAt === undefined || visitedAt < frameIndex) continue;
+      if (!shouldRenderContributionCell(day, visitedAt, frameIndex)) continue;
 
       const [columnText, rowText] = key.split(":");
       const column = Number(columnText);
