@@ -8,6 +8,7 @@ import {
   getCommitPauseFramesForFrame,
   getContributionLevelForFrame,
   getScorePopupsForFrame,
+  getScoreProgressColor,
   renderCommitManGif,
 } from "../src/animation.js";
 
@@ -150,6 +151,24 @@ test("adds a deterministic one- or two-frame pause before eating green cells onl
   assert.equal(getCommitPauseFramesForFrame(scoreEvents, 5), 1);
   assert.equal(getCommitPauseFramesForFrame(scoreEvents, 6), 0);
   assert.equal(getCommitPauseFramesForFrame([], 0), 0);
+});
+
+test("progresses score colors from yellow through orange and blues to deep green", () => {
+  assert.equal(getScoreProgressColor(0, 100), "#FFDF00");
+  assert.equal(getScoreProgressColor(15, 100), "#FF9800");
+  assert.equal(getScoreProgressColor(28, 100), "#F97316");
+  assert.equal(getScoreProgressColor(38, 100), "#7DD3FC");
+  assert.equal(getScoreProgressColor(52, 100), "#3B82F6");
+  assert.equal(getScoreProgressColor(65, 100), "#1D4ED8");
+  assert.equal(getScoreProgressColor(76, 100), "#86EFAC");
+  assert.equal(getScoreProgressColor(88, 100), "#22C55E");
+  assert.equal(getScoreProgressColor(100, 100), "#006D32");
+});
+
+test("clamps score-color progress and defaults empty totals to bright yellow", () => {
+  assert.equal(getScoreProgressColor(-1, 100), "#FFDF00");
+  assert.equal(getScoreProgressColor(120, 100), "#006D32");
+  assert.equal(getScoreProgressColor(0, 0), "#FFDF00");
 });
 
 test("shows floating score popups briefly with an increasing score", () => {
