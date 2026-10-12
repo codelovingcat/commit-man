@@ -7,6 +7,7 @@ import {
   getCommitManEyePosition,
   getCommitPauseFramesForFrame,
   getContributionLevelForFrame,
+  getFinaleFrameState,
   getScorePopupsForFrame,
   getScoreProgressColor,
   renderCommitManGif,
@@ -216,6 +217,30 @@ test("keeps Commit-Man's eye above its center while moving vertically", () => {
   }
 });
 
+test("plays three distinct puff bursts, then leaves a short empty-garden beat", () => {
+  const states = Array.from({ length: 17 }, (_, index) => getFinaleFrameState(index));
+  const burstStartFrames = states.flatMap((state, index) =>
+    state.activePuffBurstIndices.some(
+      (burstIndex) => index === 2 + burstIndex * 4,
+    )
+      ? [index]
+      : [],
+  );
+
+  assert.deepEqual(burstStartFrames, [2, 6, 10]);
+  assert.equal(states[0]!.characterVisible, true);
+  assert.deepEqual(states[1]!.activePuffBurstIndices, []);
+  assert.deepEqual(states[2]!.activePuffBurstIndices, [0]);
+  assert.deepEqual(states[6]!.activePuffBurstIndices, [1]);
+  assert.deepEqual(states[10]!.activePuffBurstIndices, [2]);
+  assert.equal(states[13]!.characterVisible, true);
+  assert.equal(states[14]!.characterVisible, false);
+  assert.equal(states[14]!.emptyGarden, true);
+  assert.equal(states[16]!.emptyGarden, true);
+  assert.equal(getFinaleFrameState(17).emptyGarden, false);
+  assert.throws(() => getFinaleFrameState(-1), /non-negative integer/);
+});
+
 test("renders a valid, looping GIF with the expected dimensions", () => {
   const gif = renderCommitManGif(sampleDays);
   assert.equal(Buffer.from(gif.slice(0, 6)).toString("ascii"), "GIF89a");
@@ -224,7 +249,7 @@ test("renders a valid, looping GIF with the expected dimensions", () => {
   const height = gif[8]! | (gif[9]! << 8);
   assert.equal(width, 44);
   assert.equal(height, 134);
-  assert.ok(gif.byteLength > 100);
+  assert.ok(gif.byteLength > 1000, "GIF should include the movement and finale frames");
   assert.equal(gif[gif.length - 1], 0x3b);
 });
 
