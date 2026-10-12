@@ -60,6 +60,12 @@ test("renders a valid, looping GIF with the expected dimensions", () => {
   assert.equal(gif[gif.length - 1], 0x3b);
 });
 
+test("uses a slower default frame delay of 70ms", () => {
+  const defaultTiming = renderCommitManGif(sampleDays);
+  const explicitTiming = renderCommitManGif(sampleDays, { frameDelayMs: 70 });
+  assert.deepEqual(defaultTiming, explicitTiming);
+});
+
 test("produces deterministic output for the same contribution data", () => {
   const first = renderCommitManGif(sampleDays, { frameDelayMs: 50 });
   const second = renderCommitManGif(sampleDays, { frameDelayMs: 50 });
