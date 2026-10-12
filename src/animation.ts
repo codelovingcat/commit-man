@@ -193,11 +193,7 @@ export function getContributionLevelForFrame(
   return "NONE";
 }
 
-/**
- * Render an animated GIF of Commit-Man travelling through the contribution
- * garden. The character follows a connected, varied-width zigzag path and
- * changes eaten green cells to gray while preserving the grid squares.
- */
+
 /**
  * Build one score event per green contribution cell, in the order Commit-Man
  * reaches those cells. Empty gray cells never award points.
@@ -236,6 +232,10 @@ export function getScorePopupsForFrame(
 }
 
 /**
+ * Render an animated GIF of Commit-Man travelling through the contribution
+ * garden. The character follows a connected, varied-width zigzag path and
+ * changes eaten green cells to gray while preserving the grid squares.
+ */
 export function renderCommitManGif(
   inputDays: ContributionDay[],
   options: CommitManAnimationOptions = {},
