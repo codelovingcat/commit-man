@@ -31,6 +31,7 @@ const PALETTE: number[][] = [
 ];
 
 const MOUTH_SEQUENCE = [0.06, 0.24, 0.48, 0.24];
+const DEFAULT_FRAME_DELAY_MS = 70;
 
 export function buildSerpentinePath(columns: number): GridPosition[] {
   if (!Number.isInteger(columns) || columns < 1) {
@@ -81,7 +82,7 @@ export function renderCommitManGif(
   const cellSize = options.cellSize ?? 10;
   const gap = options.gap ?? 3;
   const padding = options.padding ?? 16;
-  const frameDelayMs = options.frameDelayMs ?? 35;
+  const frameDelayMs = options.frameDelayMs ?? DEFAULT_FRAME_DELAY_MS;
 
   if (!Number.isInteger(cellSize) || cellSize < 4 || cellSize > 24) {
     throw new Error("cellSize must be an integer between 4 and 24.");
