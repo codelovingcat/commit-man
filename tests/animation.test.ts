@@ -5,6 +5,7 @@ import {
   buildScoreEvents,
   buildZigzagPath,
   getCommitManEyePosition,
+  getCommitPauseFramesForFrame,
   getContributionLevelForFrame,
   getScorePopupsForFrame,
   renderCommitManGif,
@@ -133,6 +134,22 @@ test("awards increasing scores only for green contribution cells", () => {
       { position: { column: 2, row: 0 }, score: 2, eatenAtFrame: 2 },
     ],
   );
+});
+
+test("adds a deterministic one- or two-frame pause before eating green cells only", () => {
+  const scoreEvents = [
+    { position: { column: 1, row: 0 }, score: 1, eatenAtFrame: 1 },
+    { position: { column: 2, row: 0 }, score: 2, eatenAtFrame: 3 },
+    { position: { column: 4, row: 0 }, score: 3, eatenAtFrame: 6 },
+  ];
+
+  assert.equal(getCommitPauseFramesForFrame(scoreEvents, 0), 1);
+  assert.equal(getCommitPauseFramesForFrame(scoreEvents, 1), 0);
+  assert.equal(getCommitPauseFramesForFrame(scoreEvents, 2), 2);
+  assert.equal(getCommitPauseFramesForFrame(scoreEvents, 3), 0);
+  assert.equal(getCommitPauseFramesForFrame(scoreEvents, 5), 1);
+  assert.equal(getCommitPauseFramesForFrame(scoreEvents, 6), 0);
+  assert.equal(getCommitPauseFramesForFrame([], 0), 0);
 });
 
 test("shows floating score popups briefly with an increasing score", () => {
