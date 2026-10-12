@@ -33,7 +33,6 @@ export interface FinaleFrameState {
 }
 
 const BACKGROUND = "#0d1117";
-const CHARACTER = "#ffdf00";
 const EYE = "#242424";
 
 const SCORE_COLOR_STOPS = [
@@ -52,7 +51,7 @@ const SCORE_COLOR_STOPS = [
  * Map scoring progress to the requested color journey:
  * yellow -> orange -> light/dark blue -> light/dark green.
  */
-export function getScoreProgressColor(score: number, totalScores: number): string {
+export function getProgressColor(score: number, totalScores: number): string {
   const progress = totalScores <= 0
     ? 0
     : Math.max(0, Math.min(1, score / totalScores));
@@ -72,6 +71,11 @@ export function getScoreProgressColor(score: number, totalScores: number): strin
   return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("").toUpperCase()}`;
 }
 
+/** Backward-compatible name for code specifically referring to score popups. */
+export function getScoreProgressColor(score: number, totalScores: number): string {
+  return getProgressColor(score, totalScores);
+}
+
 const BASE_PALETTE: number[][] = [
   [13, 17, 23],
   [22, 27, 34],
@@ -89,7 +93,7 @@ const BASE_PALETTE: number[][] = [
 // changing popup colors instead of quantizing every score back to yellow.
 const SCORE_PROGRESS_PALETTE = Array.from(
   { length: 101 },
-  (_, index) => hexToRgb(getScoreProgressColor(index, 100)),
+  (_, index) => hexToRgb(getProgressColor(index, 100)),
 );
 const PALETTE: number[][] = [...BASE_PALETTE, ...SCORE_PROGRESS_PALETTE];
 
@@ -362,6 +366,18 @@ export function buildScoreEvents(
 }
 
 /**
+ * Return the cumulative score at a frame. Only green-cell score events advance it.
+ */
+export function getScoreAtFrame(scoreEvents: readonly ScoreEvent[], frameIndex: number): number {
+  let score = 0;
+  for (const event of scoreEvents) {
+    if (event.eatenAtFrame > frameIndex) break;
+    score = event.score;
+  }
+  return score;
+}
+
+/**
  * Return score popups that are visible in a frame, with their age for animation.
  */
 export function getScorePopupsForFrame(
@@ -534,6 +550,7 @@ export function renderCommitManGif(
       radius,
       heading,
       MOUTH_SEQUENCE[frameIndex % MOUTH_SEQUENCE.length]!,
+      getProgressColor(getScoreAtFrame(scoreEvents, frameIndex), scoreEvents.length),
     );
 
     for (const popup of getScorePopupsForFrame(scoreEvents, frameIndex)) {
@@ -547,7 +564,7 @@ export function renderCommitManGif(
         cellY,
         popup.score,
         popup.age,
-        getScoreProgressColor(popup.score, scoreEvents.length),
+        getProgressColor(popup.score, scoreEvents.length),
       );
     }
 
@@ -598,6 +615,7 @@ export function renderCommitManGif(
         radius,
         finalHeading,
         MOUTH_SEQUENCE[frameIndex % MOUTH_SEQUENCE.length]!,
+        getProgressColor(scoreEvents.length, scoreEvents.length),
       );
     }
 
@@ -794,7 +812,7 @@ function drawBubbleRing(
 }
 
 /**
- * Draw a short-lived yellow +N label that rises above the eaten contribution.
+ * Draw a short-lived progress-colored +N label above the eaten contribution.
  * A compact 3x5 bitmap font keeps rendering deterministic without extra assets.
  */
 function drawScorePopup(
@@ -890,8 +908,9 @@ function drawCommitMan(
   radius: number,
   heading: number,
   mouthAngle: number,
+  characterColor: string,
 ): void {
-  const yellow = hexToRgb(CHARACTER);
+  const character = hexToRgb(characterColor);
   const eye = hexToRgb(EYE);
   const left = Math.floor(centerX - radius);
   const right = Math.ceil(centerX + radius);
@@ -913,7 +932,7 @@ function drawCommitMan(
       if (Math.abs(angleDifference) < mouthAngle && dx * dx + dy * dy > squaredRadius * 0.12) {
         continue;
       }
-      setPixel(pixels, width, height, x, y, yellow);
+      setPixel(pixels, width, height, x, y, character);
     }
   }
 
