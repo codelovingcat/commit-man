@@ -54,16 +54,19 @@ export function buildSerpentinePath(columns: number): GridPosition[] {
 }
 
 /**
- * Empty contribution cells are part of GitHub's grid background, not food.
- * Keep them visible after Commit-Man passes; visited contribution cells vanish.
+ * Return the color level for a contribution cell in the current frame.
+ * Once a green cell has been eaten, preserve the square as an empty gray cell.
  */
-export function shouldRenderContributionCell(
+export function getContributionLevelForFrame(
   day: ContributionDay,
   visitedAt: number | undefined,
   frameIndex: number,
-): boolean {
-  if (visitedAt === undefined) return false;
-  return day.contributionLevel === "NONE" || visitedAt >= frameIndex;
+): ContributionDay["contributionLevel"] | undefined {
+  if (visitedAt === undefined) return undefined;
+  if (day.contributionLevel === "NONE" || visitedAt >= frameIndex) {
+    return day.contributionLevel;
+  }
+  return "NONE";
 }
 
 /**
@@ -138,12 +141,13 @@ export function renderCommitManGif(
 
     for (const [key, day] of cellByKey) {
       const visitedAt = visitOrder.get(key);
-      if (!shouldRenderContributionCell(day, visitedAt, frameIndex)) continue;
+      const level = getContributionLevelForFrame(day, visitedAt, frameIndex);
+      if (level === undefined) continue;
 
       const [columnText, rowText] = key.split(":");
       const column = Number(columnText);
       const row = Number(rowText);
-      const color = LEVEL_COLORS[day.contributionLevel];
+      const color = LEVEL_COLORS[level];
       fillCell(
         pixels,
         width,
