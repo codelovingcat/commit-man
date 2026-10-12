@@ -115,10 +115,21 @@ test("renders a valid, looping GIF with the expected dimensions", () => {
 
   const width = gif[6]! | (gif[7]! << 8);
   const height = gif[8]! | (gif[9]! << 8);
-  assert.equal(width, 42);
-  assert.equal(height, 120);
+  assert.equal(width, 44);
+  assert.equal(height, 134);
   assert.ok(gif.byteLength > 100);
   assert.equal(gif[gif.length - 1], 0x3b);
+});
+
+test("defaults to the same 12px cell size and 3px gap as Snake", () => {
+  const defaultGif = renderCommitManGif(sampleDays);
+  const snakeSizedGif = renderCommitManGif(sampleDays, {
+    cellSize: 12,
+    gap: 3,
+    padding: 16,
+  });
+
+  assert.deepEqual(defaultGif, snakeSizedGif);
 });
 
 test("uses a slower default frame delay of 70ms", () => {
