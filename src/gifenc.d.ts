@@ -25,11 +25,14 @@ declare module "gifenc" {
     bytes(): Uint8Array;
   }
 
-  export function GIFEncoder(options?: GIFEncoderOptions): GIFEncoderInstance;
+  const gifenc: {
+    GIFEncoder(options?: GIFEncoderOptions): GIFEncoderInstance;
+    applyPalette(
+      rgba: Uint8Array | Uint8ClampedArray,
+      palette: number[][],
+      format?: "rgb565" | "rgb444" | "rgba4444",
+    ): Uint8Array;
+  };
 
-  export function applyPalette(
-    rgba: Uint8Array | Uint8ClampedArray,
-    palette: number[][],
-    format?: "rgb565" | "rgb444" | "rgba4444",
-  ): Uint8Array;
+  export default gifenc;
 }
