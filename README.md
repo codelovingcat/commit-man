@@ -8,7 +8,7 @@ Turn your GitHub contribution graph into a playful, Pac-Man-inspired animation. 
 
 ## Project status
 
-🚧 **Early development — the first playable animation is being built.**
+🚧 **Early development — the contribution garden, character, animated GIF generator, and publishing workflow are implemented; profile presentation is being polished.**
 
 The initial goal is intentionally small: render a GitHub-style contribution garden, animate a yellow Pac-Man-inspired character with an opening and closing mouth, move it across the garden, and export the animation as a GIF.
 
@@ -16,19 +16,21 @@ There is no maze, ghosts, lives, collision system, or restart mechanic in the fi
 
 ## Planned first version
 
-- [x] Render a GitHub-style contribution garden (initial SVG foundation).
+- [x] Render a GitHub-style contribution garden.
 - [x] Retrieve contribution data from GitHub GraphQL when credentials are configured.
 - [x] Draw a recognizable yellow Commit-Man character as an SVG.
-- [x] Generate repeatable open/close mouth frames in four directions.
-- [ ] Move the character along a clear path through the contribution cells.
-- [ ] Create an animated GIF suitable for use in a GitHub profile README.
-- [ ] Document complete setup, configuration, and profile usage.
+- [x] Generate repeatable open/close mouth frames.
+- [x] Move the character along a continuous path through the contribution cells.
+- [x] Export an animated GIF suitable for a GitHub profile README.
+- [x] Document setup, configuration, and profile usage.
 
 ## Current implementation
 
 The contribution garden is generated as SVG, with one cell per day and GitHub-inspired contribution intensity colors. Data retrieval and rendering are separate modules.
 
-The Commit-Man sprite is also generated as SVG with a transparent background. Its mouth angle, size, label, and facing direction are configurable. A small frame helper produces a repeatable mouth-animation sequence; garden movement and GIF export are tracked separately.
+The Commit-Man sprite can be generated as a transparent SVG with configurable size, mouth opening, label, and direction. The GIF renderer moves the character along a continuous serpentine path through the garden, animates its mouth, and removes visited cells to create an eating effect.
+
+This project is a generator, not a browser-based game UI. Opening the repository files directly in a browser may show the file listing; the generated GIF is the profile-ready result.
 
 ### Requirements
 
@@ -45,7 +47,7 @@ npm test
 npm run build
 ```
 
-### Generate a contribution garden
+### Generate a contribution garden SVG
 
 Set the following environment variables before running the generator:
 
@@ -72,7 +74,46 @@ OUTPUT_PATH="commit-man-garden.svg" \
 npm run build && npm run generate:garden
 ```
 
-The generator requests the most recent 365 days of contribution data. GitHub token permissions and contribution visibility may affect the data available. Do not paste tokens into issues, commits, or README files.
+### Generate the animated Commit-Man GIF
+
+Use the same GitHub credentials. The GIF defaults to `output/commit-man.gif`; set `GIF_OUTPUT_PATH` to choose another path.
+
+PowerShell example:
+
+```powershell
+$env:GITHUB_USERNAME = "codelovingcat"
+$env:GITHUB_TOKEN = "your-token"
+$env:GIF_OUTPUT_PATH = "output/commit-man.gif"
+npm run build
+npm run generate:gif
+```
+
+Bash example:
+
+```bash
+GITHUB_USERNAME="codelovingcat" \
+GITHUB_TOKEN="your-token" \
+GIF_OUTPUT_PATH="output/commit-man.gif" \
+npm run build && npm run generate:gif
+```
+
+Never commit or paste access tokens into issues, commits, or README files. The generator requests the most recent 365 days of contribution data; the available information depends on the token and contribution visibility.
+
+### Publish and embed the GIF on your profile
+
+The `Generate Commit-Man GIF` GitHub Actions workflow runs manually, on pushes to `main`, and on a weekly schedule. It generates the animation and publishes it to the `output` branch at:
+
+`https://raw.githubusercontent.com/codelovingcat/commit-man/output/commit-man.gif`
+
+After the workflow has successfully published the first GIF, embed it in your profile README with:
+
+```html
+<p align="center">
+  <a href="https://github.com/codelovingcat/commit-man">
+    <img src="https://raw.githubusercontent.com/codelovingcat/commit-man/output/commit-man.gif" alt="Commit-Man eating the GitHub contribution garden" />
+  </a>
+</p>
+```
 
 ## The idea
 
@@ -96,7 +137,9 @@ The visual language should stay close to the familiar contribution graph, while 
 - Document customization options.
 
 ### Future ideas — exploratory
+
 These are ideas, not promises for the first release:
+
 - Turn empty days or selected cells into maze-like paths.
 - Add ghost characters and simple chase behavior.
 - Explore collision, losing, and restart animations.

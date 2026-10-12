@@ -1,0 +1,64 @@
+name: Generate Commit-Man GIF
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 3 * * 0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: commit-man-output
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run tests
+        run: npm test
+
+      - name: Generate animated GIF
+        env:
+          GITHUB_USERNAME: codelovingcat
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIF_OUTPUT_PATH: output/commit-man.gif
+        run: npm run generate:gif
+
+      - name: Publish generated GIF
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          mkdir -p output-branch
+
+          if git ls-remote --exit-code --heads origin output >/dev/null 2>&1; then
+            git fetch origin output
+            git worktree add --detach output-branch origin/output
+          else
+            git worktree add --detach output-branch
+            git -C output-branch checkout --orphan output
+            git -C output-branch rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          rm -f output-branch/commit-man.gif
+          cp output/commit-man.gif output-branch/commit-man.gif
+          git -C output-branch add commit-man.gif
+          git -C output-branch commit -m "chore: publish Commit-Man animation" || true
+          git -C output-branch push origin HEAD:output
