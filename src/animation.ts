@@ -49,6 +49,24 @@ const HORIZONTAL_RUN_LENGTHS = [6, 7, 7] as const;
 const SHORT_RUN_MIN = 2;
 const SHORT_RUN_MAX = 4;
 const VERTICAL_SHIFT_PATTERN = [2, 1, 1, 2, 2] as const;
+const SCORE_POPUP_DURATION_FRAMES = 5;
+const SCORE_POPUP_RISE_PER_FRAME = 1;
+const SCORE_POPUP_MAX_RISE = 4;
+const SCORE_GLYPH_WIDTH = 3;
+const SCORE_GLYPH_HEIGHT = 5;
+const SCORE_GLYPHS: Record<string, readonly string[]> = {
+  "+": ["...", ".#.", "###", ".#.", "..."],
+  "0": ["###", "#.#", "#.#", "#.#", "###"],
+  "1": [".#.", "##.", ".#.", ".#.", "###"],
+  "2": ["###", "..#", "###", "#..", "###"],
+  "3": ["###", "..#", "###", "..#", "###"],
+  "4": ["#.#", "#.#", "###", "..#", "..#"],
+  "5": ["###", "#..", "###", "..#", "###"],
+  "6": ["###", "#..", "###", "#.#", "###"],
+  "7": ["###", "..#", "..#", ".#.", ".#."],
+  "8": ["###", "#.#", "###", "#.#", "###"],
+  "9": ["###", "#.#", "###", "..#", "###"],
+};
 
 /**
  * Build a deterministic roaming route through the contribution garden.
