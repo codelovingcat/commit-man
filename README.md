@@ -18,8 +18,8 @@ There is no maze, ghosts, lives, collision system, or restart mechanic in the fi
 
 - [x] Render a GitHub-style contribution garden (initial SVG foundation).
 - [x] Retrieve contribution data from GitHub GraphQL when credentials are configured.
-- [ ] Draw a recognizable yellow, round Commit-Man character.
-- [ ] Animate the character's mouth as it moves.
+- [x] Draw a recognizable yellow Commit-Man character as an SVG.
+- [x] Generate repeatable open/close mouth frames in four directions.
 - [ ] Move the character along a clear path through the contribution cells.
 - [ ] Create an animated GIF suitable for use in a GitHub profile README.
 - [ ] Document complete setup, configuration, and profile usage.
@@ -27,6 +27,8 @@ There is no maze, ghosts, lives, collision system, or restart mechanic in the fi
 ## Current implementation
 
 The contribution garden is generated as SVG, with one cell per day and GitHub-inspired contribution intensity colors. Data retrieval and rendering are separate modules.
+
+The Commit-Man sprite is also generated as SVG with a transparent background. Its mouth angle, size, label, and facing direction are configurable. A small frame helper produces a repeatable mouth-animation sequence; garden movement and GIF export are tracked separately.
 
 ### Requirements
 
