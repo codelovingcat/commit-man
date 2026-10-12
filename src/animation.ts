@@ -45,32 +45,18 @@ const DEFAULT_FRAME_DELAY_MS = 70;
 
 const DEFAULT_ZIGZAG_SEED = 0xC0FFEE;
 const CONTRIBUTION_ROWS = 7;
-const MIN_ZIGZAG_RUN = 8;
-const MAX_ZIGZAG_RUN = 14;
-
-const SCORE_POPUP_DURATION_FRAMES = 5;
-const SCORE_POPUP_RISE_PER_FRAME = 1;
-const SCORE_POPUP_MAX_RISE = 4;
-const SCORE_GLYPH_WIDTH = 3;
-const SCORE_GLYPH_HEIGHT = 5;
-const SCORE_GLYPHS: Record<string, readonly string[]> = {
-  "+": ["...", ".#.", "###", ".#.", "..."],
-  "0": ["###", "#.#", "#.#", "#.#", "###"],
-  "1": [".#.", "##.", ".#.", ".#.", "###"],
-  "2": ["###", "..#", "###", "#..", "###"],
-  "3": ["###", "..#", "###", "..#", "###"],
-  "4": ["#.#", "#.#", "###", "..#", "..#"],
-  "5": ["###", "#..", "###", "..#", "###"],
-  "6": ["###", "#..", "###", "#.#", "###"],
-  "7": ["###", "..#", "..#", ".#.", ".#."],
-  "8": ["###", "#.#", "###", "#.#", "###"],
-  "9": ["###", "#.#", "###", "..#", "###"],
-};
+const HORIZONTAL_RUN_LENGTHS = [6, 7, 7] as const;
+const SHORT_RUN_MIN = 2;
+const SHORT_RUN_MAX = 4;
+const VERTICAL_SHIFT_PATTERN = [2, 1, 1, 2, 2] as const;
 
 /**
- * Build a deterministic, connected path through every contribution cell.
- * Long, varied column bands reduce the rapid back-and-forth movement while
- * retaining a continuous serpentine route through the full grid.
+ * Build a deterministic roaming route through the contribution garden.
+ *
+ * Instead of sweeping every row in order, Commit-Man travels in horizontal
+ * runs, sometimes continues in the same direction after shifting one or two
+ * rows, and reverses only at selected points or at a grid edge. The coverage
+ * pass may revisit gray cells, but it guarantees that every cell is visited.
  */
 export function buildZigzagPath(
   columns: number,
@@ -84,85 +70,140 @@ export function buildZigzagPath(
   }
 
   const random = createSeededRandom(seed);
-  const bandWidths = createZigzagBandWidths(columns, random);
-  const bands: Array<{ startColumn: number; width: number }> = [];
-  let nextColumn = 0;
+  const totalCells = columns * CONTRIBUTION_ROWS;
+  const path: GridPosition[] = [{ column: 0, row: 0 }];
+  const visited = new Set<string>([positionKey(path[0]!)]);
+  let current = path[0]!;
+  let horizontalDirection = 1;
+  let segmentsUntilTurn = 3;
 
-  for (const width of bandWidths) {
-    bands.push({ startColumn: nextColumn, width });
-    nextColumn += width;
+  const append = (position: GridPosition): void => {
+    path.push(position);
+    current = position;
+    visited.add(positionKey(position));
+  };
+
+  // Roam in long horizontal bursts before doing a tidy coverage pass.
+  // This creates the less repetitive movement pattern requested for the GIF.
+  for (
+    let segmentIndex = 0;
+    segmentIndex < columns && visited.size < totalCells;
+    segmentIndex += 1
+  ) {
+    const runLength = segmentsUntilTurn === 1
+      ? SHORT_RUN_MIN + Math.floor(random() * (SHORT_RUN_MAX - SHORT_RUN_MIN + 1))
+      : HORIZONTAL_RUN_LENGTHS[
+          Math.floor(random() * HORIZONTAL_RUN_LENGTHS.length)
+        ]!;
+
+    let hitGridEdge = false;
+    for (let step = 0; step < runLength; step += 1) {
+      const nextColumn = current.column + horizontalDirection;
+      if (nextColumn < 0 || nextColumn >= columns) {
+        hitGridEdge = true;
+        break;
+      }
+
+      append({ column: nextColumn, row: current.row });
+      if (visited.size === totalCells) break;
+    }
+
+    if (visited.size === totalCells) break;
+
+    const atGridEdge = current.column === 0 || current.column === columns - 1;
+    if (hitGridEdge || atGridEdge || segmentsUntilTurn <= 1) {
+      horizontalDirection *= -1;
+      segmentsUntilTurn = random() < 0.7 ? 3 : 2;
+    } else {
+      segmentsUntilTurn -= 1;
+    }
+
+    const preferredShift = VERTICAL_SHIFT_PATTERN[
+      segmentIndex % VERTICAL_SHIFT_PATTERN.length
+    ]!;
+    let verticalDirection = current.row === 0
+      ? 1
+      : current.row === CONTRIBUTION_ROWS - 1
+        ? -1
+        : random() < 0.72
+          ? 1
+          : -1;
+
+    let availableRows = verticalDirection > 0
+      ? CONTRIBUTION_ROWS - 1 - current.row
+      : current.row;
+    if (availableRows === 0) {
+      verticalDirection *= -1;
+      availableRows = verticalDirection > 0
+        ? CONTRIBUTION_ROWS - 1 - current.row
+        : current.row;
+    }
+
+    const actualShift = Math.min(preferredShift, availableRows);
+    for (let step = 0; step < actualShift; step += 1) {
+      append({ column: current.column, row: current.row + verticalDirection });
+      if (visited.size === totalCells) break;
+    }
   }
 
-  const path: GridPosition[] = [];
-  let startsAtTop = true;
+  // Cover cells the roaming section has not reached yet. Connect to the
+  // nearest unvisited cell using adjacent steps, allowing harmless revisits.
+  while (visited.size < totalCells) {
+    let target: GridPosition | undefined;
+    let targetDistance = Number.POSITIVE_INFINITY;
+    let targetTieBreaker = Number.NEGATIVE_INFINITY;
 
-  for (const band of bands) {
-    const endColumn = band.startColumn + band.width - 1;
+    for (let row = 0; row < CONTRIBUTION_ROWS; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const candidate = { column, row };
+        if (visited.has(positionKey(candidate))) continue;
 
-    for (let rowOffset = 0; rowOffset < CONTRIBUTION_ROWS; rowOffset += 1) {
-      const row = startsAtTop ? rowOffset : CONTRIBUTION_ROWS - 1 - rowOffset;
+        const distance =
+          Math.abs(candidate.column - current.column) +
+          Math.abs(candidate.row - current.row);
+        const tieBreaker = random();
 
-      if (rowOffset % 2 === 0) {
-        for (let column = band.startColumn; column <= endColumn; column += 1) {
-          path.push({ column, row });
-        }
-      } else {
-        for (let column = endColumn; column >= band.startColumn; column -= 1) {
-          path.push({ column, row });
+        if (
+          distance < targetDistance ||
+          (distance === targetDistance && tieBreaker > targetTieBreaker)
+        ) {
+          target = candidate;
+          targetDistance = distance;
+          targetTieBreaker = tieBreaker;
         }
       }
     }
 
-    startsAtTop = !startsAtTop;
+    if (!target) break;
+
+    const moveHorizontallyFirst = random() < 0.5;
+    const moveHorizontally = (): void => {
+      while (current.column !== target!.column) {
+        append({
+          column: current.column + (target!.column > current.column ? 1 : -1),
+          row: current.row,
+        });
+      }
+    };
+    const moveVertically = (): void => {
+      while (current.row !== target!.row) {
+        append({
+          column: current.column,
+          row: current.row + (target!.row > current.row ? 1 : -1),
+        });
+      }
+    };
+
+    if (moveHorizontallyFirst) {
+      moveHorizontally();
+      moveVertically();
+    } else {
+      moveVertically();
+      moveHorizontally();
+    }
   }
 
   return path;
-}
-
-/**
- * Choose varied band widths while avoiding a very short final band on normal
- * contribution grids. Small grids can be narrower than the preferred range.
- */
-function createZigzagBandWidths(
-  columns: number,
-  random: () => number,
-): number[] {
-  const minimumBandCount = Math.ceil(columns / MAX_ZIGZAG_RUN);
-  const maximumBandCount = Math.max(1, Math.floor(columns / MIN_ZIGZAG_RUN));
-  const preferredBandCount = Math.max(1, Math.round(columns / 11));
-  const bandCount = minimumBandCount <= maximumBandCount
-    ? Math.max(minimumBandCount, Math.min(maximumBandCount, preferredBandCount))
-    : minimumBandCount;
-
-  const widths: number[] = [];
-  let remaining = columns;
-
-  for (let index = 0; index < bandCount; index += 1) {
-    const bandsLeft = bandCount - index - 1;
-    if (bandsLeft === 0) {
-      widths.push(remaining);
-      break;
-    }
-
-    const minimumWidth = Math.max(
-      MIN_ZIGZAG_RUN,
-      remaining - bandsLeft * MAX_ZIGZAG_RUN,
-    );
-    const maximumWidth = Math.min(
-      MAX_ZIGZAG_RUN,
-      remaining - bandsLeft * MIN_ZIGZAG_RUN,
-    );
-
-    const width = minimumWidth <= maximumWidth
-      ? minimumWidth + Math.floor(random() * (maximumWidth - minimumWidth + 1))
-      : Math.floor(remaining / (bandsLeft + 1))
-        + (index < remaining % (bandsLeft + 1) ? 1 : 0);
-
-    widths.push(width);
-    remaining -= width;
-  }
-
-  return widths;
 }
 
 function createSeededRandom(seed: number): () => number {
@@ -203,12 +244,17 @@ export function buildScoreEvents(
   cellByKey: ReadonlyMap<string, ContributionDay>,
 ): ScoreEvent[] {
   const events: ScoreEvent[] = [];
+  const scoredCells = new Set<string>();
   let score = 0;
 
   path.forEach((position, eatenAtFrame) => {
-    const day = cellByKey.get(positionKey(position));
+    const key = positionKey(position);
+    if (scoredCells.has(key)) return;
+
+    const day = cellByKey.get(key);
     if (!day || day.contributionLevel === "NONE") return;
 
+    scoredCells.add(key);
     score += 1;
     events.push({ position, score, eatenAtFrame });
   });
@@ -294,7 +340,11 @@ export function renderCommitManGif(
     cellByKey.set(positionKey({ column, row }), day);
   }
 
-  const visitOrder = new Map(path.map((position, index) => [positionKey(position), index]));
+  const visitOrder = new Map<string, number>();
+  path.forEach((position, index) => {
+    const key = positionKey(position);
+    if (!visitOrder.has(key)) visitOrder.set(key, index);
+  });
   const scoreEvents = buildScoreEvents(path, cellByKey);
   const encoder = GIFEncoder();
   const radius = Math.max(3, cellSize * 0.66);
