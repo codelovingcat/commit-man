@@ -16,15 +16,61 @@ There is no maze, ghosts, lives, collision system, or restart mechanic in the fi
 
 ## Planned first version
 
-- [ ] Render a GitHub-style contribution garden.
-- [ ] Use real GitHub contribution data where the implementation and available access allow it.
+- [x] Render a GitHub-style contribution garden (initial SVG foundation).
+- [x] Retrieve contribution data from GitHub GraphQL when credentials are configured.
 - [ ] Draw a recognizable yellow, round Commit-Man character.
 - [ ] Animate the character's mouth as it moves.
 - [ ] Move the character along a clear path through the contribution cells.
 - [ ] Create an animated GIF suitable for use in a GitHub profile README.
-- [ ] Document setup, configuration, and usage once the implementation is established.
+- [ ] Document complete setup, configuration, and profile usage.
 
-The exact technical approach will be documented as the implementation takes shape. The project should stay approachable, easy to configure, and friendly to contributors.
+## Current implementation
+
+The contribution garden is generated as SVG, with one cell per day and GitHub-inspired contribution intensity colors. Data retrieval and rendering are separate modules.
+
+### Requirements
+
+- Node.js 20 or newer
+- npm
+- A GitHub username
+- A GitHub token with access to the GitHub GraphQL API
+
+### Setup
+
+```bash
+npm install
+npm test
+npm run build
+```
+
+### Generate a contribution garden
+
+Set the following environment variables before running the generator:
+
+- `GITHUB_USERNAME` — GitHub account whose contribution calendar should be rendered.
+- `GITHUB_TOKEN` — token used to query GitHub GraphQL. Keep it private; never commit it.
+- `OUTPUT_PATH` — optional SVG output path. Defaults to `commit-man-garden.svg`.
+
+PowerShell example:
+
+```powershell
+$env:GITHUB_USERNAME = "your-github-username"
+$env:GITHUB_TOKEN = "your-token"
+$env:OUTPUT_PATH = "commit-man-garden.svg"
+npm run build
+npm run generate:garden
+```
+
+Bash example:
+
+```bash
+GITHUB_USERNAME="your-github-username" \
+GITHUB_TOKEN="your-token" \
+OUTPUT_PATH="commit-man-garden.svg" \
+npm run build && npm run generate:garden
+```
+
+The generator requests the most recent 365 days of contribution data. GitHub token permissions and contribution visibility may affect the data available. Do not paste tokens into issues, commits, or README files.
 
 ## The idea
 
@@ -53,10 +99,6 @@ These are ideas, not promises for the first release:
 - Add ghost characters and simple chase behavior.
 - Explore collision, losing, and restart animations.
 - Add configurable visual themes or animation options.
-
-## Intended use
-
-The goal is to make a fun, customizable contribution animation that developers can share on their GitHub profiles. Once profile integration is implemented, the README will include a generated preview and copy-ready usage instructions.
 
 ## Development approach
 
