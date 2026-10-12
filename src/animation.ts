@@ -33,24 +33,78 @@ const PALETTE: number[][] = [
 const MOUTH_SEQUENCE = [0.06, 0.24, 0.48, 0.24];
 const DEFAULT_FRAME_DELAY_MS = 70;
 
-export function buildSerpentinePath(columns: number): GridPosition[] {
+const DEFAULT_ZIGZAG_SEED = 0xC0FFEE;
+const CONTRIBUTION_ROWS = 7;
+const MIN_ZIGZAG_RUN = 2;
+const MAX_ZIGZAG_RUN = 5;
+
+/**
+ * Build a deterministic, connected path through every contribution cell.
+ * The route snakes through short column bands of varying widths instead of
+ * crossing the entire garden before changing rows. Odd/even bands alternate
+ * between descending and ascending through the seven rows.
+ */
+export function buildZigzagPath(
+  columns: number,
+  seed = DEFAULT_ZIGZAG_SEED,
+): GridPosition[] {
   if (!Number.isInteger(columns) || columns < 1) {
     throw new Error("columns must be a positive integer.");
   }
+  if (!Number.isSafeInteger(seed)) {
+    throw new Error("seed must be a safe integer.");
+  }
+
+  const random = createSeededRandom(seed);
+  const bands: Array<{ startColumn: number; width: number }> = [];
+  let nextColumn = 0;
+
+  while (nextColumn < columns) {
+    const remaining = columns - nextColumn;
+    const width = remaining <= MAX_ZIGZAG_RUN
+      ? remaining
+      : MIN_ZIGZAG_RUN + Math.floor(random() * (MAX_ZIGZAG_RUN - MIN_ZIGZAG_RUN + 1));
+
+    bands.push({ startColumn: nextColumn, width });
+    nextColumn += width;
+  }
 
   const path: GridPosition[] = [];
-  for (let row = 0; row < 7; row += 1) {
-    if (row % 2 === 0) {
-      for (let column = 0; column < columns; column += 1) {
-        path.push({ column, row });
-      }
-    } else {
-      for (let column = columns - 1; column >= 0; column -= 1) {
-        path.push({ column, row });
+  let startsAtTop = true;
+
+  for (const band of bands) {
+    const endColumn = band.startColumn + band.width - 1;
+
+    for (let rowOffset = 0; rowOffset < CONTRIBUTION_ROWS; rowOffset += 1) {
+      const row = startsAtTop ? rowOffset : CONTRIBUTION_ROWS - 1 - rowOffset;
+
+      if (rowOffset % 2 === 0) {
+        for (let column = band.startColumn; column <= endColumn; column += 1) {
+          path.push({ column, row });
+        }
+      } else {
+        for (let column = endColumn; column >= band.startColumn; column -= 1) {
+          path.push({ column, row });
+        }
       }
     }
+
+    startsAtTop = !startsAtTop;
   }
+
   return path;
+}
+
+function createSeededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+
+  return () => {
+    state = (state + 0x6D2B79F5) | 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
 }
 
 /**
@@ -71,8 +125,8 @@ export function getContributionLevelForFrame(
 
 /**
  * Render an animated GIF of Commit-Man travelling through the contribution
- * garden. The character follows a continuous serpentine path and removes each
- * visited contribution cell to create a simple eating effect.
+ * garden. The character follows a connected, varied-width zigzag path and
+ * changes eaten green cells to gray while preserving the grid squares.
  */
 export function renderCommitManGif(
   inputDays: ContributionDay[],
@@ -111,7 +165,7 @@ export function renderCommitManGif(
   }
 
   const columns = Math.ceil((firstWeekday + totalDays) / 7);
-  const path = buildSerpentinePath(columns);
+  const path = buildZigzagPath(columns);
   const pitch = cellSize + gap;
   const width = padding * 2 + columns * pitch - gap;
   const height = padding * 2 + 7 * pitch - gap;

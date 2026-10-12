@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ContributionDay } from "../src/contributions.js";
 import {
-  buildSerpentinePath,
+  buildZigzagPath,
   getCommitManEyePosition,
   getContributionLevelForFrame,
   renderCommitManGif,
@@ -15,7 +15,7 @@ const sampleDays: ContributionDay[] = [
 ];
 
 test("creates a continuous serpentine path through every grid cell", () => {
-  const path = buildSerpentinePath(3);
+  const path = buildZigzagPath(3);
   assert.equal(path.length, 21);
   assert.deepEqual(path.slice(0, 6), [
     { column: 0, row: 0 },
@@ -31,6 +31,39 @@ test("creates a continuous serpentine path through every grid cell", () => {
     const current = path[index]!;
     assert.equal(Math.abs(current.column - previous.column) + Math.abs(current.row - previous.row), 1);
   }
+});
+
+test("builds a deterministic zigzag with varied run lengths", () => {
+  const columns = 17;
+  const seed = 20261012;
+  const path = buildZigzagPath(columns, seed);
+
+  assert.deepEqual(path, buildZigzagPath(columns, seed));
+  assert.equal(path.length, columns * 7);
+  assert.deepEqual(path[0], { column: 0, row: 0 });
+  assert.equal(
+    new Set(path.map(({ column, row }) => `${column}:${row}`)).size,
+    columns * 7,
+  );
+
+  for (const position of path) {
+    assert.ok(position.column >= 0 && position.column < columns);
+    assert.ok(position.row >= 0 && position.row < 7);
+  }
+
+  for (let index = 1; index < path.length; index += 1) {
+    const previous = path[index - 1]!;
+    const current = path[index]!;
+    assert.equal(
+      Math.abs(current.column - previous.column) + Math.abs(current.row - previous.row),
+      1,
+      `path jumps between ${previous.column}:${previous.row} and ${current.column}:${current.row}`,
+    );
+  }
+
+  const firstHorizontalRunLength = path.findIndex((position) => position.row !== 0);
+  assert.ok(firstHorizontalRunLength >= 2 && firstHorizontalRunLength <= 5);
+  assert.ok(firstHorizontalRunLength < columns, "the first run should end before crossing the entire garden");
 });
 
 test("keeps empty contribution cells gray throughout the animation", () => {
@@ -104,5 +137,6 @@ test("rejects empty contribution data and invalid animation settings", () => {
   assert.throws(() => renderCommitManGif([]), /At least one contribution day/);
   assert.throws(() => renderCommitManGif(sampleDays, { cellSize: 0 }), /cellSize/);
   assert.throws(() => renderCommitManGif(sampleDays, { gap: -1 }), /gap/);
-  assert.throws(() => buildSerpentinePath(0), /positive integer/);
+  assert.throws(() => buildZigzagPath(0), /positive integer/);
+  assert.throws(() => buildZigzagPath(3, Number.NaN), /safe integer/);
 });
