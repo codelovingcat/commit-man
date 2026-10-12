@@ -26,6 +26,12 @@ export interface ScorePopup extends ScoreEvent {
   readonly age: number;
 }
 
+export interface FinaleFrameState {
+  readonly characterVisible: boolean;
+  readonly activePuffBurstIndices: readonly number[];
+  readonly emptyGarden: boolean;
+}
+
 const BACKGROUND = "#0d1117";
 const CHARACTER = "#ffdf00";
 const EYE = "#242424";
@@ -75,6 +81,8 @@ const BASE_PALETTE: number[][] = [
   [57, 211, 83],
   [255, 223, 0],
   [36, 36, 36],
+  [230, 237, 243],
+  [125, 211, 252],
 ];
 
 // Include sampled colors from the score gradient so gifenc can preserve the
@@ -99,6 +107,17 @@ const SCORE_POPUP_RISE_PER_FRAME = 1;
 const SCORE_POPUP_MAX_RISE = 4;
 const SCORE_GLYPH_WIDTH = 3;
 const SCORE_GLYPH_HEIGHT = 5;
+const FINALE_HOLD_FRAMES = 2;
+const PUFF_BURST_COUNT = 3;
+const PUFF_BURST_INTERVAL_FRAMES = 4;
+const PUFF_BURST_LIFETIME_FRAMES = 4;
+const EMPTY_GARDEN_FRAMES = 3;
+const PUFF_BUBBLE_COLORS = ["#E6EDF3", "#7DD3FC"] as const;
+const PUFF_BUBBLE_DIRECTIONS = [
+  { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
+  { x: -1, y: 0 },                         { x: 1, y: 0 },
+  { x: -1, y: 1 },  { x: 0, y: 1 },  { x: 1, y: 1 },
+] as const;
 const SCORE_GLYPHS: Record<string, readonly string[]> = {
   "+": ["...", ".#.", "###", ".#.", "..."],
   "0": ["###", "#.#", "#.#", "#.#", "###"],
@@ -376,6 +395,41 @@ export function getCommitPauseFramesForFrame(
 }
 
 /**
+ * Describe each finale frame: three separate puff bursts, followed by a short
+ * empty-garden beat before the looping GIF returns to its first frame.
+ */
+export function getFinaleFrameState(finaleFrameIndex: number): FinaleFrameState {
+  if (!Number.isInteger(finaleFrameIndex) || finaleFrameIndex < 0) {
+    throw new Error("finaleFrameIndex must be a non-negative integer.");
+  }
+
+  const burstStarts = Array.from(
+    { length: PUFF_BURST_COUNT },
+    (_, index) => FINALE_HOLD_FRAMES + index * PUFF_BURST_INTERVAL_FRAMES,
+  );
+  const activePuffBurstIndices = burstStarts.flatMap((start, index) =>
+    finaleFrameIndex >= start &&
+    finaleFrameIndex < start + PUFF_BURST_LIFETIME_FRAMES
+      ? [index]
+      : [],
+  );
+  const lastPuffEndsAt = burstStarts[PUFF_BURST_COUNT - 1]! + PUFF_BURST_LIFETIME_FRAMES;
+  const characterVisible = finaleFrameIndex < lastPuffEndsAt;
+
+  return {
+    characterVisible,
+    activePuffBurstIndices,
+    emptyGarden: !characterVisible && finaleFrameIndex < lastPuffEndsAt + EMPTY_GARDEN_FRAMES,
+  };
+}
+
+const FINALE_FRAME_COUNT =
+  FINALE_HOLD_FRAMES +
+  (PUFF_BURST_COUNT - 1) * PUFF_BURST_INTERVAL_FRAMES +
+  PUFF_BURST_LIFETIME_FRAMES +
+  EMPTY_GARDEN_FRAMES;
+
+/**
  * Render an animated GIF of Commit-Man travelling through the contribution
  * garden. The character follows a connected, varied-width zigzag path and
  * changes eaten green cells to gray while preserving the grid squares.
@@ -450,24 +504,16 @@ export function renderCommitManGif(
   for (let frameIndex = 0; frameIndex < path.length; frameIndex += 1) {
     const pixels = createCanvas(width, height, hexToRgb(BACKGROUND));
 
-    for (const [key, day] of cellByKey) {
-      const visitedAt = visitOrder.get(key);
-      const level = getContributionLevelForFrame(day, visitedAt, frameIndex);
-      if (level === undefined) continue;
-
-      const [columnText, rowText] = key.split(":");
-      const column = Number(columnText);
-      const row = Number(rowText);
-      const color = LEVEL_COLORS[level];
-      fillCell(
-        pixels,
-        width,
-        padding + column * pitch,
-        padding + row * pitch,
-        cellSize,
-        hexToRgb(color),
-      );
-    }
+    drawContributionCells(
+      pixels,
+      width,
+      padding,
+      pitch,
+      cellSize,
+      cellByKey,
+      visitOrder,
+      frameIndex,
+    );
 
     const current = path[frameIndex]!;
     const next = path[frameIndex + 1];
@@ -513,6 +559,64 @@ export function renderCommitManGif(
       delay: frameDelayMs * (1 + commitPauseFrames),
       ...(frameIndex === 0 ? { repeat: 0 } : {}),
     });
+  }
+
+  const finalPosition = path[path.length - 1]!;
+  const finalPrevious = path[path.length - 2];
+  const finalHeading = finalPrevious
+    ? Math.atan2(
+        finalPosition.row - finalPrevious.row,
+        finalPosition.column - finalPrevious.column,
+      )
+    : 0;
+  const finalCenterX = padding + finalPosition.column * pitch + cellSize / 2;
+  const finalCenterY = padding + finalPosition.row * pitch + cellSize / 2;
+
+  for (let finaleFrameIndex = 0; finaleFrameIndex < FINALE_FRAME_COUNT; finaleFrameIndex += 1) {
+    const frameIndex = path.length + finaleFrameIndex;
+    const finaleState = getFinaleFrameState(finaleFrameIndex);
+    const pixels = createCanvas(width, height, hexToRgb(BACKGROUND));
+
+    drawContributionCells(
+      pixels,
+      width,
+      padding,
+      pitch,
+      cellSize,
+      cellByKey,
+      visitOrder,
+      frameIndex,
+    );
+
+    if (finaleState.characterVisible) {
+      drawCommitMan(
+        pixels,
+        width,
+        height,
+        finalCenterX,
+        finalCenterY,
+        radius,
+        finalHeading,
+        MOUTH_SEQUENCE[frameIndex % MOUTH_SEQUENCE.length]!,
+      );
+    }
+
+    for (const burstIndex of finaleState.activePuffBurstIndices) {
+      const burstStart = FINALE_HOLD_FRAMES + burstIndex * PUFF_BURST_INTERVAL_FRAMES;
+      const burstAge = finaleFrameIndex - burstStart;
+      drawPuffBurst(
+        pixels,
+        width,
+        height,
+        finalCenterX,
+        finalCenterY,
+        radius,
+        burstAge,
+      );
+    }
+
+    const indexed = applyPalette(pixels, PALETTE);
+    encoder.writeFrame(indexed, width, height, { palette: PALETTE, delay: frameDelayMs });
   }
 
   encoder.finish();
@@ -595,6 +699,96 @@ function fillCell(
       pixels[offset + 1] = color[1];
       pixels[offset + 2] = color[2];
       pixels[offset + 3] = 255;
+    }
+  }
+}
+
+function drawContributionCells(
+  pixels: Uint8ClampedArray,
+  width: number,
+  padding: number,
+  pitch: number,
+  cellSize: number,
+  cellByKey: ReadonlyMap<string, ContributionDay>,
+  visitOrder: ReadonlyMap<string, number>,
+  frameIndex: number,
+): void {
+  for (const [key, day] of cellByKey) {
+    const visitedAt = visitOrder.get(key);
+    const level = getContributionLevelForFrame(day, visitedAt, frameIndex);
+    if (level === undefined) continue;
+
+    const [columnText, rowText] = key.split(":");
+    const column = Number(columnText);
+    const row = Number(rowText);
+    fillCell(
+      pixels,
+      width,
+      padding + column * pitch,
+      padding + row * pitch,
+      cellSize,
+      hexToRgb(LEVEL_COLORS[level]),
+    );
+  }
+}
+
+/** Draw a ring of light bubbles which expand and disperse around Commit-Man. */
+function drawPuffBurst(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  centerX: number,
+  centerY: number,
+  characterRadius: number,
+  age: number,
+): void {
+  const spread = Math.round(characterRadius * 0.7) + age * 2;
+  const bubbleRadius = age === 0 ? 1 : age === 3 ? 1 : 2;
+
+  PUFF_BUBBLE_DIRECTIONS.forEach((direction, index) => {
+    // The last frame of a puff is sparse to suggest the bubbles dispersing.
+    if (age === 3 && index % 2 === 1) return;
+
+    const bubbleX = Math.round(centerX + direction.x * spread);
+    const bubbleY = Math.round(centerY + direction.y * spread);
+    const color = hexToRgb(PUFF_BUBBLE_COLORS[(index + age) % PUFF_BUBBLE_COLORS.length]!);
+    drawBubbleRing(
+      pixels,
+      width,
+      height,
+      bubbleX,
+      bubbleY,
+      bubbleRadius,
+      color,
+    );
+  });
+}
+
+function drawBubbleRing(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  color: [number, number, number],
+): void {
+  const outerRadiusSquared = radius * radius;
+  const innerRadius = Math.max(0, radius - 1);
+  const innerRadiusSquared = innerRadius * innerRadius;
+
+  for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+    for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+      const distanceSquared = offsetX * offsetX + offsetY * offsetY;
+      if (distanceSquared > outerRadiusSquared || distanceSquared < innerRadiusSquared) continue;
+      setPixel(
+        pixels,
+        width,
+        height,
+        centerX + offsetX,
+        centerY + offsetY,
+        color,
+      );
     }
   }
 }
