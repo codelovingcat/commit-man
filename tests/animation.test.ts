@@ -3,8 +3,8 @@ import test from "node:test";
 import type { ContributionDay } from "../src/contributions.js";
 import {
   buildSerpentinePath,
+  getContributionLevelForFrame,
   renderCommitManGif,
-  shouldRenderContributionCell,
 } from "../src/animation.js";
 
 const sampleDays: ContributionDay[] = [
@@ -32,20 +32,20 @@ test("creates a continuous serpentine path through every grid cell", () => {
   }
 });
 
-test("keeps gray empty contribution cells visible after Commit-Man passes", () => {
+test("keeps empty contribution cells gray throughout the animation", () => {
   const emptyDay = sampleDays[0]!;
   assert.equal(emptyDay.contributionLevel, "NONE");
-  assert.equal(shouldRenderContributionCell(emptyDay, 0, 1), true);
-  assert.equal(shouldRenderContributionCell(emptyDay, 0, 20), true);
-  assert.equal(shouldRenderContributionCell(emptyDay, undefined, 1), false);
+  assert.equal(getContributionLevelForFrame(emptyDay, 0, 1), "NONE");
+  assert.equal(getContributionLevelForFrame(emptyDay, 0, 20), "NONE");
+  assert.equal(getContributionLevelForFrame(emptyDay, undefined, 1), undefined);
 });
 
-test("removes green contribution cells only after they are visited", () => {
+test("turns an eaten green contribution cell gray without removing its square", () => {
   const greenDay = sampleDays[1]!;
   assert.notEqual(greenDay.contributionLevel, "NONE");
-  assert.equal(shouldRenderContributionCell(greenDay, 2, 1), true);
-  assert.equal(shouldRenderContributionCell(greenDay, 2, 2), true);
-  assert.equal(shouldRenderContributionCell(greenDay, 2, 3), false);
+  assert.equal(getContributionLevelForFrame(greenDay, 2, 1), "FIRST_QUARTILE");
+  assert.equal(getContributionLevelForFrame(greenDay, 2, 2), "FIRST_QUARTILE");
+  assert.equal(getContributionLevelForFrame(greenDay, 2, 3), "NONE");
 });
 
 test("renders a valid, looping GIF with the expected dimensions", () => {
