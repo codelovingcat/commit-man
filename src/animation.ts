@@ -136,7 +136,7 @@ export function renderCommitManGif(
     throw new Error("At least one contribution day is required.");
   }
 
-  const cellSize = options.cellSize ?? 10;
+  const cellSize = options.cellSize ?? 12;
   const gap = options.gap ?? 3;
   const padding = options.padding ?? 16;
   const frameDelayMs = options.frameDelayMs ?? DEFAULT_FRAME_DELAY_MS;
