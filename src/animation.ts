@@ -29,7 +29,44 @@ export interface ScorePopup extends ScoreEvent {
 const BACKGROUND = "#0d1117";
 const CHARACTER = "#ffdf00";
 const EYE = "#242424";
-const PALETTE: number[][] = [
+
+const SCORE_COLOR_STOPS = [
+  { progress: 0, color: "#FFDF00" },   // bright yellow
+  { progress: 0.15, color: "#FF9800" }, // orange
+  { progress: 0.28, color: "#F97316" }, // deeper orange
+  { progress: 0.38, color: "#7DD3FC" }, // light blue
+  { progress: 0.52, color: "#3B82F6" }, // medium blue
+  { progress: 0.65, color: "#1D4ED8" }, // dark blue
+  { progress: 0.76, color: "#86EFAC" }, // light green
+  { progress: 0.88, color: "#22C55E" }, // vivid green
+  { progress: 1, color: "#006D32" },    // deep green at completion
+] as const;
+
+/**
+ * Map scoring progress to the requested color journey:
+ * yellow -> orange -> light/dark blue -> light/dark green.
+ */
+export function getScoreProgressColor(score: number, totalScores: number): string {
+  const progress = totalScores <= 0
+    ? 0
+    : Math.max(0, Math.min(1, score / totalScores));
+  const upperIndex = SCORE_COLOR_STOPS.findIndex((stop) => stop.progress >= progress);
+
+  if (upperIndex <= 0) return SCORE_COLOR_STOPS[0]!.color;
+
+  const lower = SCORE_COLOR_STOPS[upperIndex - 1]!;
+  const upper = SCORE_COLOR_STOPS[upperIndex]!;
+  const ratio = (progress - lower.progress) / (upper.progress - lower.progress);
+  const lowerRgb = hexToRgb(lower.color);
+  const upperRgb = hexToRgb(upper.color);
+  const channels = lowerRgb.map((channel, index) =>
+    Math.round(channel + ((upperRgb[index] ?? channel) - channel) * ratio),
+  );
+
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+}
+
+const BASE_PALETTE: number[][] = [
   [13, 17, 23],
   [22, 27, 34],
   [14, 68, 41],
@@ -39,6 +76,14 @@ const PALETTE: number[][] = [
   [255, 223, 0],
   [36, 36, 36],
 ];
+
+// Include sampled colors from the score gradient so gifenc can preserve the
+// changing popup colors instead of quantizing every score back to yellow.
+const SCORE_PROGRESS_PALETTE = Array.from(
+  { length: 101 },
+  (_, index) => hexToRgb(getScoreProgressColor(index, 100)),
+);
+const PALETTE: number[][] = [...BASE_PALETTE, ...SCORE_PROGRESS_PALETTE];
 
 const MOUTH_SEQUENCE = [0.06, 0.24, 0.48, 0.24];
 const DEFAULT_FRAME_DELAY_MS = 70;
@@ -456,6 +501,7 @@ export function renderCommitManGif(
         cellY,
         popup.score,
         popup.age,
+        getScoreProgressColor(popup.score, scoreEvents.length),
       );
     }
 
@@ -565,6 +611,7 @@ function drawScorePopup(
   cellTop: number,
   score: number,
   age: number,
+  scoreColor: string,
 ): void {
   const text = `+${score}`;
   const scale = score < 10 ? 2 : 1;
@@ -575,7 +622,7 @@ function drawScorePopup(
   const rise = Math.min(age * SCORE_POPUP_RISE_PER_FRAME, SCORE_POPUP_MAX_RISE);
   const y = Math.max(0, Math.round(cellTop - textHeight - 2 - rise));
   const shadow = hexToRgb(BACKGROUND);
-  const foreground = hexToRgb(CHARACTER);
+  const foreground = hexToRgb(scoreColor);
 
   drawBitmapText(pixels, width, height, text, x + 1, y + 1, shadow, scale);
   drawBitmapText(pixels, width, height, text, x, y, foreground, scale);
