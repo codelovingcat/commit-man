@@ -16,33 +16,35 @@ const sampleDays: ContributionDay[] = [
   { date: "2026-10-13", contributionCount: 5, contributionLevel: "SECOND_QUARTILE" },
 ];
 
-test("creates a continuous serpentine path through every grid cell", () => {
-  const path = buildZigzagPath(3);
-  assert.equal(path.length, 21);
-  assert.deepEqual(path.slice(0, 6), [
-    { column: 0, row: 0 },
-    { column: 1, row: 0 },
-    { column: 2, row: 0 },
-    { column: 2, row: 1 },
-    { column: 1, row: 1 },
-    { column: 0, row: 1 },
-  ]);
+function directionSegments(path: readonly { column: number; row: number }[]) {
+  const segments: Array<{ deltaColumn: number; deltaRow: number; length: number }> = [];
 
   for (let index = 1; index < path.length; index += 1) {
     const previous = path[index - 1]!;
     const current = path[index]!;
-    assert.equal(Math.abs(current.column - previous.column) + Math.abs(current.row - previous.row), 1);
+    const deltaColumn = current.column - previous.column;
+    const deltaRow = current.row - previous.row;
+    const last = segments[segments.length - 1];
+
+    if (
+      last &&
+      last.deltaColumn === deltaColumn &&
+      last.deltaRow === deltaRow
+    ) {
+      last.length += 1;
+    } else {
+      segments.push({ deltaColumn, deltaRow, length: 1 });
+    }
   }
-});
 
-test("builds a deterministic zigzag with varied run lengths", () => {
-  const columns = 17;
-  const seed = 20261012;
-  const path = buildZigzagPath(columns, seed);
+  return segments;
+}
 
-  assert.deepEqual(path, buildZigzagPath(columns, seed));
-  assert.equal(path.length, columns * 7);
+test("builds a connected route that visits every cell, allowing natural revisits", () => {
+  const columns = 3;
+  const path = buildZigzagPath(columns);
   assert.deepEqual(path[0], { column: 0, row: 0 });
+  assert.deepEqual(path, buildZigzagPath(columns));
   assert.equal(
     new Set(path.map(({ column, row }) => `${column}:${row}`)).size,
     columns * 7,
@@ -62,32 +64,34 @@ test("builds a deterministic zigzag with varied run lengths", () => {
       `path jumps between ${previous.column}:${previous.row} and ${current.column}:${current.row}`,
     );
   }
+});
 
-  const firstHorizontalRunLength = path.findIndex((position) => position.row !== 0);
-  assert.ok(firstHorizontalRunLength >= 8 && firstHorizontalRunLength <= 14);
-  assert.ok(firstHorizontalRunLength < columns, "the first run should end before crossing the entire garden");
-
-  const normalGridPath = buildZigzagPath(53, seed);
-  const horizontalRunLengths: number[] = [];
-  let horizontalRunLength = 1;
-
-  for (let index = 1; index < normalGridPath.length; index += 1) {
-    const previous = normalGridPath[index - 1]!;
-    const current = normalGridPath[index]!;
-
-    if (previous.row === current.row) {
-      horizontalRunLength += 1;
-    } else {
-      horizontalRunLengths.push(horizontalRunLength);
-      horizontalRunLength = 1;
-    }
-  }
-  horizontalRunLengths.push(horizontalRunLength);
-
-  assert.ok(
-    horizontalRunLengths.every((length) => length >= 8),
-    `normal-grid path contains a short horizontal run: ${horizontalRunLengths.join(", ")}`,
+test("moves forward across offset runs before turning back", () => {
+  const seed = 20261012;
+  const path = buildZigzagPath(53, seed);
+  assert.deepEqual(path, buildZigzagPath(53, seed));
+  assert.deepEqual(path[0], { column: 0, row: 0 });
+  assert.equal(
+    new Set(path.map(({ column, row }) => `${column}:${row}`)).size,
+    53 * 7,
+    "the route must eventually visit every contribution cell",
   );
+
+  const segments = directionSegments(path);
+  assert.equal(segments[0]!.deltaColumn, 1);
+  assert.ok(segments[0]!.length >= 6 && segments[0]!.length <= 7);
+
+  assert.equal(segments[1]!.deltaColumn, 0);
+  assert.equal(segments[1]!.length, 2, "the first long run should be followed by a two-cell drop");
+
+  assert.equal(segments[2]!.deltaColumn, 1);
+  assert.ok(segments[2]!.length >= 6 && segments[2]!.length <= 7);
+  assert.equal(segments[3]!.deltaColumn, 0);
+  assert.equal(segments[3]!.length, 1);
+
+  assert.equal(segments[4]!.deltaColumn, 1);
+  assert.ok(segments[4]!.length >= 2 && segments[4]!.length <= 4);
+  assert.equal(segments[6]!.deltaColumn, -1, "the route reverses after the shorter run rather than after every row");
 });
 
 test("keeps empty contribution cells gray throughout the animation", () => {
@@ -111,6 +115,7 @@ test("awards increasing scores only for green contribution cells", () => {
     { column: 0, row: 0 },
     { column: 1, row: 0 },
     { column: 2, row: 0 },
+    { column: 1, row: 0 },
     { column: 0, row: 1 },
   ];
   const cellByKey = new Map([
