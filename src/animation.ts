@@ -313,6 +313,24 @@ export function getScorePopupsForFrame(
 }
 
 /**
+ * Match Snake's commit-eating beat by extending the frame just before a green
+ * contribution is eaten. Alternate one and two extra frame durations so the
+ * pause stays brief but noticeable, without introducing nondeterminism.
+ */
+export function getCommitPauseFramesForFrame(
+  scoreEvents: readonly ScoreEvent[],
+  frameIndex: number,
+): 0 | 1 | 2 {
+  const nextMoveFrame = frameIndex + 1;
+  const nextScoreEvent = scoreEvents.find(
+    (event) => event.eatenAtFrame === nextMoveFrame,
+  );
+
+  if (!nextScoreEvent) return 0;
+  return nextScoreEvent.score % 2 === 0 ? 2 : 1;
+}
+
+/**
  * Render an animated GIF of Commit-Man travelling through the contribution
  * garden. The character follows a connected, varied-width zigzag path and
  * changes eaten green cells to gray while preserving the grid squares.
@@ -442,9 +460,11 @@ export function renderCommitManGif(
     }
 
     const indexed = applyPalette(pixels, PALETTE);
+    const commitPauseFrames = getCommitPauseFramesForFrame(scoreEvents, frameIndex);
+
     encoder.writeFrame(indexed, width, height, {
       palette: PALETTE,
-      delay: frameDelayMs,
+      delay: frameDelayMs * (1 + commitPauseFrames),
       ...(frameIndex === 0 ? { repeat: 0 } : {}),
     });
   }
