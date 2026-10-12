@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ContributionDay } from "../src/contributions.js";
-import { buildSerpentinePath, renderCommitManGif } from "../src/animation.js";
+import {
+  buildSerpentinePath,
+  renderCommitManGif,
+  shouldRenderContributionCell,
+} from "../src/animation.js";
 
 const sampleDays: ContributionDay[] = [
   { date: "2026-10-11", contributionCount: 0, contributionLevel: "NONE" },
@@ -26,6 +30,22 @@ test("creates a continuous serpentine path through every grid cell", () => {
     const current = path[index]!;
     assert.equal(Math.abs(current.column - previous.column) + Math.abs(current.row - previous.row), 1);
   }
+});
+
+test("keeps gray empty contribution cells visible after Commit-Man passes", () => {
+  const emptyDay = sampleDays[0]!;
+  assert.equal(emptyDay.contributionLevel, "NONE");
+  assert.equal(shouldRenderContributionCell(emptyDay, 0, 1), true);
+  assert.equal(shouldRenderContributionCell(emptyDay, 0, 20), true);
+  assert.equal(shouldRenderContributionCell(emptyDay, undefined, 1), false);
+});
+
+test("removes green contribution cells only after they are visited", () => {
+  const greenDay = sampleDays[1]!;
+  assert.notEqual(greenDay.contributionLevel, "NONE");
+  assert.equal(shouldRenderContributionCell(greenDay, 2, 1), true);
+  assert.equal(shouldRenderContributionCell(greenDay, 2, 2), true);
+  assert.equal(shouldRenderContributionCell(greenDay, 2, 3), false);
 });
 
 test("renders a valid, looping GIF with the expected dimensions", () => {
