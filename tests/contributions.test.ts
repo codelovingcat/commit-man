@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchGitHubContributions } from "../src/contributions.js";
+import {
+  CONTRIBUTION_HISTORY_START_DATE,
+  fetchGitHubContributions,
+} from "../src/contributions.js";
 
 const payload = {
   data: {
@@ -11,7 +14,7 @@ const payload = {
             {
               contributionDays: [
                 {
-                  date: "2026-10-12",
+                  date: "2026-06-12",
                   contributionCount: 2,
                   contributionLevel: "FIRST_QUARTILE",
                 },
@@ -23,6 +26,63 @@ const payload = {
     },
   },
 };
+
+test("keeps a fixed history start and requests long histories in one-year-safe chunks", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedVariables: Array<{ username: string; from: string; to: string }> = [];
+
+  globalThis.fetch = (async (_input, init) => {
+    const body = JSON.parse(String(init?.body)) as {
+      variables: { username: string; from: string; to: string };
+    };
+    const responseDate = requestedVariables.length === 0 ? "2025-10-12" : "2026-10-15";
+    requestedVariables.push(body.variables);
+
+    return new Response(JSON.stringify({
+      data: {
+        user: {
+          contributionsCollection: {
+            contributionCalendar: {
+              weeks: [{
+                contributionDays: [{
+                  date: responseDate,
+                  contributionCount: 2,
+                  contributionLevel: "FIRST_QUARTILE",
+                }],
+              }],
+            },
+          },
+        },
+      },
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  const now = new Date("2026-10-15T12:34:56.000Z");
+
+  try {
+    const days = await fetchGitHubContributions("codelovingcat", "test-token", now);
+
+    assert.deepEqual(days.map((day) => day.date), ["2025-10-12", "2026-10-15"]);
+    assert.equal(requestedVariables.length, 2);
+    assert.deepEqual(requestedVariables, [
+      {
+        username: "codelovingcat",
+        from: `${CONTRIBUTION_HISTORY_START_DATE}T00:00:00.000Z`,
+        to: "2026-10-11T23:59:59.999Z",
+      },
+      {
+        username: "codelovingcat",
+        from: "2026-10-12T00:00:00.000Z",
+        to: now.toISOString(),
+      },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("retries a temporary 502 response and then returns contribution data", async () => {
   const originalFetch = globalThis.fetch;
@@ -38,10 +98,10 @@ test("retries a temporary 502 response and then returns contribution data", asyn
   }) as typeof fetch;
 
   try {
-    const days = await fetchGitHubContributions("codelovingcat", "test-token", new Date("2026-10-12T12:00:00Z"));
+    const days = await fetchGitHubContributions("codelovingcat", "test-token", new Date("2026-06-12T12:00:00Z"));
     assert.equal(calls, 3);
     assert.equal(days.length, 1);
-    assert.equal(days[0]?.date, "2026-10-12");
+    assert.equal(days[0]?.date, "2026-06-12");
     assert.equal(days[0]?.contributionCount, 2);
   } finally {
     globalThis.fetch = originalFetch;
@@ -59,7 +119,7 @@ test("does not retry permanent client errors such as unauthorized", async () => 
 
   try {
     await assert.rejects(
-      fetchGitHubContributions("codelovingcat", "invalid-token", new Date("2026-10-12T12:00:00Z")),
+      fetchGitHubContributions("codelovingcat", "invalid-token", new Date("2026-06-12T12:00:00Z")),
       /\(401\) after 1 attempt/,
     );
     assert.equal(calls, 1);
