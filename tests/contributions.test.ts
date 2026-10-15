@@ -29,11 +29,11 @@ const payload = {
 
 test("keeps a fixed history start and requests long histories in one-year-safe chunks", async () => {
   const originalFetch = globalThis.fetch;
-  const requestedVariables: Array<{ from: string; to: string }> = [];
+  const requestedVariables: Array<{ username: string; from: string; to: string }> = [];
 
   globalThis.fetch = (async (_input, init) => {
     const body = JSON.parse(String(init?.body)) as {
-      variables: { from: string; to: string };
+      variables: { username: string; from: string; to: string };
     };
     requestedVariables.push(body.variables);
 
@@ -51,10 +51,12 @@ test("keeps a fixed history start and requests long histories in one-year-safe c
     assert.equal(requestedVariables.length, 2);
     assert.deepEqual(requestedVariables, [
       {
+        username: "codelovingcat",
         from: `${CONTRIBUTION_HISTORY_START_DATE}T00:00:00.000Z`,
         to: "2026-10-11T23:59:59.999Z",
       },
       {
+        username: "codelovingcat",
         from: "2026-10-12T00:00:00.000Z",
         to: now.toISOString(),
       },
