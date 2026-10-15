@@ -97,7 +97,7 @@ GIF_OUTPUT_PATH="output/commit-man.gif" \
 npm run build && npm run generate:gif
 ```
 
-Never commit or paste access tokens into issues, commits, or README files. The generator requests the most recent 365 days of contribution data; the available information depends on the token and contribution visibility.
+Never commit or paste access tokens into issues, commits, or README files. The garden history starts on the fixed date `2025-10-12` and extends through the current date. Previously displayed days are retained and new dates extend the garden to the right, so the SVG and GIF canvas grow over time rather than dropping the oldest cells. Available contribution information still depends on the token and contribution visibility.
 
 ### Publish and embed the GIF on your profile
 
