@@ -51,6 +51,13 @@ const CONTRIBUTION_QUERY = `
 const MAX_REQUEST_ATTEMPTS = 3;
 const RETRY_DELAYS_MS = [250, 500] as const;
 
+/**
+ * The first Sunday at or before the start of the originally displayed window.
+ * Keep this fixed so existing contribution cells never fall off the left side.
+ * The garden will grow horizontally as newer dates are added.
+ */
+export const CONTRIBUTION_HISTORY_START_DATE = "2025-10-12";
+
 export function flattenContributionWeeks(weeks: ContributionWeek[]): ContributionDay[] {
   return weeks.flatMap((week) => week.contributionDays).sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -64,8 +71,11 @@ export async function fetchGitHubContributions(
   if (!token.trim()) throw new Error("A GitHub token is required.");
 
   const to = new Date(now);
-  const from = new Date(to);
-  from.setUTCDate(from.getUTCDate() - 364);
+  const from = new Date(`${CONTRIBUTION_HISTORY_START_DATE}T00:00:00.000Z`);
+
+  if (to.getTime() < from.getTime()) {
+    throw new Error("The requested end date is earlier than the contribution history start date.");
+  }
 
   const response = await requestContributionCalendar(username, token, {
     query: CONTRIBUTION_QUERY,
