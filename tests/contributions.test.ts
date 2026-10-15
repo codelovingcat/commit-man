@@ -102,7 +102,7 @@ test("does not retry permanent client errors such as unauthorized", async () => 
   try {
     await assert.rejects(
       fetchGitHubContributions("codelovingcat", "invalid-token", new Date("2026-06-12T12:00:00Z")),
-      /\\(401\\) after 1 attempt/,
+      /\(401\) after 1 attempt/,
     );
     assert.equal(calls, 1);
   } finally {
