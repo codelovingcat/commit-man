@@ -85,6 +85,7 @@ export async function fetchGitHubContributions(
   while (chunkFrom.getTime() <= to.getTime()) {
     const maxChunkTo = new Date(chunkFrom);
     maxChunkTo.setUTCDate(maxChunkTo.getUTCDate() + MAX_RANGE_DAYS_PER_REQUEST);
+    maxChunkTo.setUTCHours(23, 59, 59, 999);
     const chunkTo = maxChunkTo.getTime() < to.getTime() ? maxChunkTo : to;
 
     const response = await requestContributionCalendar(username, token, {
