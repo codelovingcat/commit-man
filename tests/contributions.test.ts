@@ -35,9 +35,26 @@ test("keeps a fixed history start and requests long histories in one-year-safe c
     const body = JSON.parse(String(init?.body)) as {
       variables: { username: string; from: string; to: string };
     };
+    const responseDate = requestedVariables.length === 0 ? "2025-10-12" : "2026-10-15";
     requestedVariables.push(body.variables);
 
-    return new Response(JSON.stringify(payload), {
+    return new Response(JSON.stringify({
+      data: {
+        user: {
+          contributionsCollection: {
+            contributionCalendar: {
+              weeks: [{
+                contributionDays: [{
+                  date: responseDate,
+                  contributionCount: 2,
+                  contributionLevel: "FIRST_QUARTILE",
+                }],
+              }],
+            },
+          },
+        },
+      },
+    }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
@@ -46,8 +63,9 @@ test("keeps a fixed history start and requests long histories in one-year-safe c
   const now = new Date("2026-10-15T12:34:56.000Z");
 
   try {
-    await fetchGitHubContributions("codelovingcat", "test-token", now);
+    const days = await fetchGitHubContributions("codelovingcat", "test-token", now);
 
+    assert.deepEqual(days.map((day) => day.date), ["2025-10-12", "2026-10-15"]);
     assert.equal(requestedVariables.length, 2);
     assert.deepEqual(requestedVariables, [
       {
