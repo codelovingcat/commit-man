@@ -50,11 +50,13 @@ const CONTRIBUTION_QUERY = `
 
 const MAX_REQUEST_ATTEMPTS = 3;
 const RETRY_DELAYS_MS = [250, 500] as const;
+// Keep each request comfortably under GitHub's one-year contribution-range limit.
+const MAX_RANGE_DAYS_PER_REQUEST = 364;
 
 /**
  * The first Sunday at or before the start of the originally displayed window.
  * Keep this fixed so existing contribution cells never fall off the left side.
- * The garden will grow horizontally as newer dates are added.
+ * The garden grows horizontally as newer dates are added.
  */
 export const CONTRIBUTION_HISTORY_START_DATE = "2025-10-12";
 
@@ -71,32 +73,55 @@ export async function fetchGitHubContributions(
   if (!token.trim()) throw new Error("A GitHub token is required.");
 
   const to = new Date(now);
-  const from = new Date(`${CONTRIBUTION_HISTORY_START_DATE}T00:00:00.000Z`);
-
-  if (to.getTime() < from.getTime()) {
+  const historyStart = new Date(`${CONTRIBUTION_HISTORY_START_DATE}T00:00:00.000Z`);
+  if (to.getTime() < historyStart.getTime()) {
     throw new Error("The requested end date is earlier than the contribution history start date.");
   }
 
-  const response = await requestContributionCalendar(username, token, {
-    query: CONTRIBUTION_QUERY,
-    variables: {
-      username,
-      from: from.toISOString(),
-      to: to.toISOString(),
-    },
-  });
+  const contributionDays = new Map<string, ContributionDay>();
+  const endDate = to.toISOString().slice(0, 10);
+  let chunkFrom = historyStart;
 
-  const payload = (await response.json()) as ContributionCalendarResponse;
-  if (payload.errors?.length) {
-    throw new Error(`GitHub GraphQL error: ${payload.errors.map((error) => error.message).join("; ")}`);
+  while (chunkFrom.getTime() <= to.getTime()) {
+    const maxChunkTo = new Date(chunkFrom);
+    maxChunkTo.setUTCDate(maxChunkTo.getUTCDate() + MAX_RANGE_DAYS_PER_REQUEST);
+    const chunkTo = maxChunkTo.getTime() < to.getTime() ? maxChunkTo : to;
+
+    const response = await requestContributionCalendar(username, token, {
+      query: CONTRIBUTION_QUERY,
+      variables: {
+        username,
+        from: chunkFrom.toISOString(),
+        to: chunkTo.toISOString(),
+      },
+    });
+
+    const payload = (await response.json()) as ContributionCalendarResponse;
+    if (payload.errors?.length) {
+      throw new Error(`GitHub GraphQL error: ${payload.errors.map((error) => error.message).join("; ")}`);
+    }
+
+    const weeks = payload.data?.user?.contributionsCollection?.contributionCalendar?.weeks;
+    if (!weeks) {
+      throw new Error(`Could not read a contribution calendar for GitHub user "${username}". Check that the username exists and is accessible.`);
+    }
+
+    for (const day of flattenContributionWeeks(weeks)) {
+      // GraphQL may return complete calendar weeks around a requested range.
+      // Keep only the fixed history window, then de-duplicate overlapping weeks.
+      if (day.date >= CONTRIBUTION_HISTORY_START_DATE && day.date <= endDate) {
+        contributionDays.set(day.date, day);
+      }
+    }
+
+    if (chunkTo.getTime() >= to.getTime()) break;
+
+    chunkFrom = new Date(chunkTo);
+    chunkFrom.setUTCDate(chunkFrom.getUTCDate() + 1);
+    chunkFrom.setUTCHours(0, 0, 0, 0);
   }
 
-  const weeks = payload.data?.user?.contributionsCollection?.contributionCalendar?.weeks;
-  if (!weeks) {
-    throw new Error(`Could not read a contribution calendar for GitHub user "${username}". Check that the username exists and is accessible.`);
-  }
-
-  return flattenContributionWeeks(weeks);
+  return [...contributionDays.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 async function requestContributionCalendar(
