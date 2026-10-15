@@ -52,7 +52,7 @@ test("keeps a fixed history start and requests long histories in one-year-safe c
     assert.deepEqual(requestedVariables, [
       {
         from: `${CONTRIBUTION_HISTORY_START_DATE}T00:00:00.000Z`,
-        to: "2026-10-11T00:00:00.000Z",
+        to: "2026-10-11T23:59:59.999Z",
       },
       {
         from: "2026-10-12T00:00:00.000Z",
