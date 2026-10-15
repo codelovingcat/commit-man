@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchGitHubContributions } from "../src/contributions.js";
+import {
+  CONTRIBUTION_HISTORY_START_DATE,
+  fetchGitHubContributions,
+} from "../src/contributions.js";
 
 const payload = {
   data: {
@@ -23,6 +26,37 @@ const payload = {
     },
   },
 };
+
+test("uses a fixed history start date and extends through the requested current date", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedVariables: { from: string; to: string } | undefined;
+
+  globalThis.fetch = (async (_input, init) => {
+    const body = JSON.parse(String(init?.body)) as {
+      variables: { from: string; to: string };
+    };
+    requestedVariables = body.variables;
+
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  const now = new Date("2026-10-15T12:34:56.000Z");
+
+  try {
+    await fetchGitHubContributions("codelovingcat", "test-token", now);
+
+    assert.equal(
+      requestedVariables?.from,
+      `${CONTRIBUTION_HISTORY_START_DATE}T00:00:00.000Z`,
+    );
+    assert.equal(requestedVariables?.to, now.toISOString());
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("retries a temporary 502 response and then returns contribution data", async () => {
   const originalFetch = globalThis.fetch;
@@ -60,7 +94,7 @@ test("does not retry permanent client errors such as unauthorized", async () => 
   try {
     await assert.rejects(
       fetchGitHubContributions("codelovingcat", "invalid-token", new Date("2026-10-12T12:00:00Z")),
-      /\(401\) after 1 attempt/,
+      /\\(401\\) after 1 attempt/,
     );
     assert.equal(calls, 1);
   } finally {
